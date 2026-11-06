@@ -63,3 +63,13 @@
 依 pnpm 官方 https://pnpm.io/settings/build#allowbuilds 設定 allowBuilds，只允許已檢閱並鎖定的 esbuild 0.25.11／0.27.1 安裝腳本，拒絕未使用的 @clerk/shared postinstall；未知套件仍維持預設拒絕，不設定 dangerouslyAllowAllBuilds，不降低 strictDepBuilds。原始碼、依賴版本與 lockfile 未變；修正後須取得 exact commit 的遠端 CI 結果，不能以本機已存在的 node_modules 宣稱乾淨 Linux 安裝已通過。
 
 CI runner 固定為 Playwright 1.59.1 支援的 Ubuntu 24.04，避免 ubuntu-latest 漂移至不支援的 26.04；保留完整的瀏覽器安裝、測試與建置步驟，不以略過測試處理環境差異。
+
+## 2026-11-07 安裝入口與主題增量
+
+沿用本頁 client/demo 安全基線，未變更 Auth、DTO、正式後端、資料庫或 LINE。新增 INSTALL.md 作為所有 LLM 的共同安裝入口，AGENTS.md 與 README 只導向該流程；指引不是能保證任意模型遵守的安全沙箱。setup.mjs 在任何套件安裝前核對專案識別、Git 根目錄、Node 24、pnpm 11.24.0 與 demo 設定；遇不明／live 設定、工具錯誤即停止，不改現有環境檔、不顯示其內容。執行只使用固定命令與 argv，不以 shell 拼接外部輸入；固定 frozen lockfile 安裝，再建置，失敗不重試或假報成功。
+
+A02／A03／A05／A08／A10 的本次反例由 scripts/setup-tests.mjs 覆蓋：錯誤版本／專案／目錄、缺檔、既有 live 設定與私密值不外洩、安裝與建置失敗、lockfile 異動停止及可重跑。主題只允許外觀偏好，不可存放 session、訊息或 token；原有未知送出鎖定與伺服器授權邊界仍須保留。正式 live 的 BLOCKED 項並未因此解除。
+
+本次回復點為 cf8c731ce6de1623adf6fc05b285f8bcb1897d27，可從該 commit 建立回復分支；不以 reset 覆蓋使用者資料。本增量未新增依賴、npm 發布套件、MCP、服務或全機工具安裝，不自動部署。
+
+主題取自自有 TeamFlow 三套基礎配色，為符合對比調整部分輔助文字及狀態／焦點色，不搬入其他專案後端或資料。12 項新主題測試連同既有 helpdesk 共 44 項通過，涵蓋無效／拒絕／滿額 storage、主題切換不清草稿或 unknown 鎖、320／390／1440 各頁與對比。僅 Chromium 桌面與行動寬度模擬；實體手機、Safari 及 live 後端不在本次驗收範圍。

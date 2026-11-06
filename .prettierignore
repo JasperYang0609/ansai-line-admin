@@ -3,6 +3,9 @@
 
 # Except these files & folders
 !/src
+!/scripts
+!AGENTS.md
+!INSTALL.md
 !index.html
 !package.json
 !tailwind.config.js

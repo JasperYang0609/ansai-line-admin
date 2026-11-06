@@ -18,6 +18,8 @@ import {
   SettingsPage,
   StaffPage,
 } from './components/modules'
+import { ThemeSelector } from './theme'
+import { useHelpdeskTheme, type HelpdeskTheme } from './theme-preference'
 import type { Conversation, HelpdeskApi, Message, Staff } from './types'
 
 type Tab = 'inbox' | 'staff' | 'reports' | 'settings' | 'learning'
@@ -46,10 +48,14 @@ function Login({
   api,
   onLogin,
   notice,
+  theme,
+  onThemeChange,
 }: {
   api: HelpdeskApi
   onLogin: (staff: Staff) => void
   notice: string
+  theme: HelpdeskTheme
+  onThemeChange: (value: string) => void
 }) {
   const [email, setEmail] = useState(
     api.mode === 'demo' ? 'teacher@example.test' : ''
@@ -77,7 +83,7 @@ function Login({
     }
   }
   return (
-    <main className='login-layout'>
+    <main className='login-layout helpdesk-theme' data-theme={theme}>
       <section className='login-story'>
         <a className='brand' href='#main'>
           <img src='/ansai-mark.svg' alt='' width='42' height='42' />
@@ -107,6 +113,7 @@ function Login({
       </section>
       <section className='login-panel' id='main'>
         <div className='login-card'>
+          <ThemeSelector theme={theme} onChange={onThemeChange} />
           <span className='page-eyebrow'>歡迎回來</span>
           <h2>開始今天的對話</h2>
           <p>
@@ -186,6 +193,7 @@ function Login({
 }
 
 export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
+  const { theme, changeTheme } = useHelpdeskTheme()
   const [user, setUser] = useState<Staff | null>(null)
   const [tab, setTab] = useState<Tab>('inbox')
   const [drawer, setDrawer] = useState(false)
@@ -402,6 +410,8 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
       <Login
         api={api}
         notice={notice}
+        theme={theme}
+        onThemeChange={changeTheme}
         onLogin={(person) => {
           epoch.current++
           setNotice('')
@@ -411,7 +421,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
       />
     )
   return (
-    <div className='helpdesk-shell'>
+    <div className='helpdesk-shell helpdesk-theme' data-theme={theme}>
       <a className='skip-link' href='#workspace'>
         跳至主要內容
       </a>
@@ -516,6 +526,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
             <strong>{navigation.find((item) => item.id === tab)?.label}</strong>
           </div>
           <div className='topbar-actions'>
+            <ThemeSelector theme={theme} onChange={changeTheme} />
             <span
               className={
                 'environment-badge ' + (api.mode === 'demo' ? 'demo' : '')

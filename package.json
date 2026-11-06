@@ -17,7 +17,10 @@
     "test:browser": "vitest",
     "test:coverage": "vitest run --coverage --browser.headless",
     "test:browser:install": "playwright install chromium --with-deps",
-    "test:helpdesk": "vitest run src/features/helpdesk --browser.headless"
+    "test:helpdesk": "vitest run src/features/helpdesk --browser.headless",
+    "setup": "node scripts/setup.mjs",
+    "setup:check": "node scripts/setup.mjs --check",
+    "test:setup": "node --test scripts/setup-tests.mjs"
   },
   "dependencies": {
     "@clerk/react": "^6.4.3",

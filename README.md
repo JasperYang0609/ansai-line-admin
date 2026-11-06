@@ -5,21 +5,16 @@
 > **目前狀態：本機教學版＋真實 API 用戶端。不是已部署的 LINE 客服成品。**
 > 預設示範模式不呼叫 LINE、不保存真實密碼、資料只存在記憶體，重整後清空。真實模式需要實作並部署下述後端契約；不能只填 Supabase URL 就使用既有 line-operator。
 
-## 本機啟動
+## 給 Codex／學員 LLM 的一句話入口
 
-需要 Node.js 24 LTS、pnpm 11.24.0。使用現有 lockfile，不必註冊 Clerk。
+> 請依 https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md 安裝安賽客服後台，先讀 AGENTS.md、記錄來源與 commit、執行安裝檢查；只啟動 demo，遇錯停止回報，不自行換套件管理器、升級依賴或接正式 LINE。
 
-```sh
-pnpm install --frozen-lockfile
-cp .env.example .env.local
-pnpm dev
-```
-
-打開終端機顯示的本機網址，以示範帳號進入即可。示範客服可以切換身分，體驗本人接手、人工回覆及恢復 AI；並非真正跨裝置多人登入。不要輸入真實顧客資料。
+安裝、啟動、工具版本與失敗處理統一以 [INSTALL.md](INSTALL.md) 為準；[AGENTS.md](AGENTS.md) 讓 repo 內的 coding agent 讀到相同入口。安裝程式會檢查目錄、版本與 demo 模式，不會覆寫你的環境設定，也不會自動接線正式服務。
 
 ## 已有什麼
 
 - 繁體中文品牌介面、響應式收件匣、搜尋與訊息歷史。
+- TeamFlow 三主題：星淵黑色／奶白葉影／雲曜科技，登入前後可切換；只記住外觀，不保存對話或登入資料。
 - AI／真人／顧客訊息與作者、發送狀態標示。
 - 示範登入、客服清單、接手／恢復 AI、版本衝突及錯誤回饋。
 - 從載入的資料計算基本數量；沒有假造 CSAT、SLA 或客服品質評分。

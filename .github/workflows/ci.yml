@@ -28,6 +28,12 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm@11.24.0
 
+      - name: Verify canonical setup preflight
+        run: node scripts/setup.mjs --check
+
+      - name: Test setup failure paths
+        run: node --test scripts/setup-tests.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

@@ -9,6 +9,11 @@ import tseslint from 'typescript-eslint'
 export default defineConfig(
   { ignores: ['dist', 'src/components/ui'] },
   {
+    files: ['scripts/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: { globals: globals.node },
+  },
+  {
     extends: [
       js.configs.recommended,
       ...tseslint.configs.recommended,
