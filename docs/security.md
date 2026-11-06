@@ -61,3 +61,5 @@
 教學版已公開至 https://github.com/JasperYang0609/ansai-line-admin ，main 初次發布為 6121652；此狀態取代上述發布前快照的「尚未建立 repo」。首次遠端 CI 在安裝步驟遭 pnpm 11 的 ERR_PNPM_IGNORED_BUILDS 阻擋，尚未進入測試，不是產品功能測試失敗。
 
 依 pnpm 官方 https://pnpm.io/settings/build#allowbuilds 設定 allowBuilds，只允許已檢閱並鎖定的 esbuild 0.25.11／0.27.1 安裝腳本，拒絕未使用的 @clerk/shared postinstall；未知套件仍維持預設拒絕，不設定 dangerouslyAllowAllBuilds，不降低 strictDepBuilds。原始碼、依賴版本與 lockfile 未變；修正後須取得 exact commit 的遠端 CI 結果，不能以本機已存在的 node_modules 宣稱乾淨 Linux 安裝已通過。
+
+CI runner 固定為 Playwright 1.59.1 支援的 Ubuntu 24.04，避免 ubuntu-latest 漂移至不支援的 26.04；保留完整的瀏覽器安裝、測試與建置步驟，不以略過測試處理環境差異。
