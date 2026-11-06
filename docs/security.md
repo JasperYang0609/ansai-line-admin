@@ -55,3 +55,9 @@
 - Vitest 與配套統一更新至 4.1.12，Faker 10.5.0；修補其餘公告涉及的傳遞依賴。minimatch 統一 11.0.1 跨過舊主版本，Node 24 符合其官方 engines；以 lint／formatter／完整測試／build 檢查消費端相容性，不只憑 audit 歸零。
 - 舊 TanStack file-route generator 不由新入口使用，移除其 Vite plugin 與開發依賴，避免強制把 Zod 3 升到不相容主版。原版已生成 routeTree 與來源保留為參考，TypeScript 仍檢查；參考檔案路由的自動生成不是本教學版功能。
 - pnpm 11 的 overrides 放在 pnpm-workspace.yaml，不使用已被忽略的 package.json pnpm 欄位。minimumReleaseAgeExclude 僅針對本次已核對的 seroval@1.7.8 安全修補版本，沒有全域停用 release-age 政策；新版本仍須另外審查。
+
+### 公開與乾淨安裝補正（2026-11-06）
+
+教學版已公開至 https://github.com/JasperYang0609/ansai-line-admin ，main 初次發布為 6121652；此狀態取代上述發布前快照的「尚未建立 repo」。首次遠端 CI 在安裝步驟遭 pnpm 11 的 ERR_PNPM_IGNORED_BUILDS 阻擋，尚未進入測試，不是產品功能測試失敗。
+
+依 pnpm 官方 https://pnpm.io/settings/build#allowbuilds 設定 allowBuilds，只允許已檢閱並鎖定的 esbuild 0.25.11／0.27.1 安裝腳本，拒絕未使用的 @clerk/shared postinstall；未知套件仍維持預設拒絕，不設定 dangerouslyAllowAllBuilds，不降低 strictDepBuilds。原始碼、依賴版本與 lockfile 未變；修正後須取得 exact commit 的遠端 CI 結果，不能以本機已存在的 node_modules 宣稱乾淨 Linux 安裝已通過。

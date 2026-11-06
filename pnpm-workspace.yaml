@@ -23,3 +23,8 @@ overrides:
   '@humanfs/node': '0.16.8'
   'fflate@0.8': '0.8.3'
   'smol-toml@1': '1.9.0'
+
+# Permit reviewed locked esbuild versions; keep unused Clerk scripts disabled.
+allowBuilds:
+  'esbuild@0.25.11 || 0.27.1': true
+  '@clerk/shared': false
