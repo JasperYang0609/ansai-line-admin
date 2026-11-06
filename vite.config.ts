@@ -3,19 +3,11 @@ import path from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { playwright } from '@vitest/browser-playwright'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    tanstackRouter({
-      target: 'react',
-      autoCodeSplitting: true,
-    }),
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -26,7 +18,11 @@ export default defineConfig({
     unstubEnvs: true,
     browser: {
       enabled: true,
-      provider: playwright(),
+      provider: playwright({
+        launchOptions: process.env.VITEST_CHROME_CHANNEL
+          ? { channel: process.env.VITEST_CHROME_CHANNEL }
+          : {},
+      }),
       instances: [{ browser: 'chromium' }],
     },
     coverage: {

@@ -1,8 +1,8 @@
 name: Close inactive issues/PR
 
+# Preserve the upstream maintenance workflow, but never auto-close classroom issues.
 on:
-  schedule:
-  - cron: '38 18 * * *'
+  workflow_dispatch:
 
 jobs:
   stale:

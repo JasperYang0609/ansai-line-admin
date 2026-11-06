@@ -32,3 +32,9 @@ dist-ssr
 # Vitest artifacts (browser screenshots/attachments)
 **/__screenshots__/
 .vitest-attachments/
+
+# Never publish environment values or local evidence
+.env.*
+!.env.example
+*.tsbuildinfo
+output/
