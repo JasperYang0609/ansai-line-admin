@@ -11,6 +11,8 @@
 
 安裝、啟動、工具版本與失敗處理統一以 [INSTALL.md](INSTALL.md) 為準；[AGENTS.md](AGENTS.md) 讓 repo 內的 coding agent 讀到相同入口。安裝程式會檢查目錄、版本與 demo 模式，不會覆寫你的環境設定，也不會自動接線正式服務。
 
+預設 host 為 **Cloudflare**，此前端預設採 Cloudflare Pages；建置／輸出與部署確認事項集中於 [INSTALL.md](INSTALL.md#5-預設託管cloudflare)。本機安裝不會自動部署。
+
 ## 已有什麼
 
 - 繁體中文品牌介面、響應式收件匣、搜尋與訊息歷史。

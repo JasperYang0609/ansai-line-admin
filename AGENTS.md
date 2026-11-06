@@ -4,6 +4,7 @@
 
 - 安裝、啟動與失敗處理的唯一流程是 [INSTALL.md](INSTALL.md)：完整讀取後才安裝。不另造平行指令。
 - Canonical repo：https://github.com/JasperYang0609/ansai-line-admin 。先核對 repo、branch、HEAD 與 git status；保留使用者未提交工作。
+- Host 預設 Cloudflare；此靜態前端預設 Cloudflare Pages，設定集中於 INSTALL.md。不要自行改用其他 host；帳號／專案／DNS／正式部署仍須另外核准。
 - 預設僅 demo。不要自動新增帳號／secret／DB／雲端服務、部署或操作 LINE。live 接線需另外核准，先讀 docs/backend-integration.md 與 docs/security.md。
 - 使用 lockfile 與 packageManager 指定的 pnpm；安裝錯誤 fail closed，不換 npm/yarn、不改 lockfile 或停用安全機制掩蓋問題。
 - 所有 VITE\_ 值都是公開的；LINE token、service-role、加密金鑰不進前端、Git、log 或 prompt。

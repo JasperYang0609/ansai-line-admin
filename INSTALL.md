@@ -54,6 +54,28 @@ pnpm dev --host 127.0.0.1
 
 若有瀏覽器工具，實際確認畫面；沒有則明確標記「build 已通過，瀏覽器操作待驗」。如需完整回歸測試，執行 `pnpm test:setup`、`pnpm test:browser:install`、`pnpm test`；瀏覽器安裝可能需要額外系統套件，未授權時不要提權。
 
+## 5. 預設託管：Cloudflare
+
+維護者指定預設 host 使用 **Cloudflare**；這個 Vite 靜態前端的預設方案採 **Cloudflare Pages**。不自行改投 Vercel／Netlify，也不因上游範例使用其他 host 就跟著部署。若使用者另指定 Workers Static Assets，先核對該方式的設定，不把 Pages 與 Workers 的指令混用。
+
+**預設託管方向不等於部署授權。** 上面的一般安裝只啟動本機 demo；除非使用者另外要求部署，LLM 不登入 Cloudflare、不建立專案、不綁網域、不改 DNS、不安裝全機部署工具，也不自動連接正式 LINE。
+
+當使用者已核准 Cloudflare Pages 的目標帳號／專案與部署時，採以下固定設定；Production 與 Preview 都需明確設定，不依賴會漂移的預設工具版本：
+
+- 部署內容：本 repo 的靜態前端，不是 Supabase／LINE 後端。
+- 專案根目錄：repo 根目錄；使用者自行放進 monorepo 時才另確認子目錄。
+- Git 整合建置命令：`node scripts/setup.mjs`，沿用同一套檢查、frozen install 與 build。這個命令限定 demo；既有 live 設定會拒絕，不可偷偷改回 demo 來掩蓋正式部署問題。
+- 輸出目錄：`dist`，不是 `src`、repo 根目錄或 node_modules。
+- Pages build environment：`NODE_VERSION=24.22.0`、`PNPM_VERSION=11.24.0`、`SKIP_DEPENDENCY_INSTALL=true`、`VITE_HELPDESK_MODE=demo`。跳過 Pages 的自動安裝是為了由 setup 統一執行 frozen install，不是跳過依賴檢查。
+- 也可在已驗證的本機／CI 建置後，以 Pages Direct Upload 交付同一份 `dist`；這條路不會在 Cloudflare 重新建置，不把整個 repo／環境檔上傳。先確認專案使用 Git integration 還是 Direct Upload，不自行切換既有部署方式。
+- 目前沒有頂層 `404.html`，可沿用 Pages 的預設 SPA fallback；若未來新增前端路由，驗證直接輸入 URL 與重新整理，不隨意把 API 錯誤 rewrite 成成功頁。
+
+部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證 demo 登入、三主題、窄版及示範回覆。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。本文件尚未在特定 Cloudflare 帳號實際部署驗證。
+
+Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權、建立資料庫或補上真人發送。正式接線時另依後端契約設定實際部署 origin 的 CORS allowlist、環境與成本，所有 `VITE_` 仍是公開資料，不放 LINE token／service-role／加密金鑰。
+
+官方設定依據（2026-11-07 核對）：[Build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/)、[Build image 與版本覆寫](https://developers.cloudflare.com/pages/configuration/build-image/)、[SPA serving](https://developers.cloudflare.com/pages/configuration/serving-pages/)。
+
 ## 完成回報
 
 回報來源 repo、完整 commit、Node／pnpm 版本、setup／build 結果、實際本機網址與畫面驗證是否完成。明確標示 demo，不能宣稱已串 LINE；不要回報密碼、token、環境檔內容或顧客訊息。
