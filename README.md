@@ -7,9 +7,9 @@
 
 ## 給 Codex／學員 LLM 的一句話入口
 
-> 請依 https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md 安裝安賽客服後台，先讀 AGENTS.md、記錄來源與 commit、執行安裝檢查；只啟動 demo，遇錯停止回報，不自行換套件管理器、升級依賴或接正式 LINE。
+> 請依 https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md 安裝安賽客服後台，先讀 AGENTS.md，依課堂已完成的 Supabase、Cloudflare、Webhook 與 Embedding 環境接線，記錄來源與 commit 並執行安裝及連線驗證；遇錯停止回報，不自行更換套件管理器、升級依賴或覆寫既有設定。
 
-安裝、啟動、工具版本與失敗處理統一以 [INSTALL.md](INSTALL.md) 為準；[AGENTS.md](AGENTS.md) 讓 repo 內的 coding agent 讀到相同入口。安裝程式會檢查目錄、版本與 demo 模式，不會覆寫你的環境設定，也不會自動接線正式服務。
+安裝、啟動、工具版本與失敗處理統一以 [INSTALL.md](INSTALL.md) 為準；[AGENTS.md](AGENTS.md) 讓 repo 內的 coding agent 讀到相同入口。安裝程式會檢查目錄、版本及模式宣告，接受課堂既有的 live 設定，不會覆寫你的環境設定，也不會自動接線正式服務。
 
 預設 host 為 **Cloudflare**，此前端預設採 Cloudflare Pages；建置／輸出與部署確認事項集中於 [INSTALL.md](INSTALL.md#5-預設託管cloudflare)。本機安裝不會自動部署。
 
@@ -45,7 +45,7 @@ src/components/ui/            可直接修改的 shadcn 元件
 
 既有 LINE webhook／AI／知識庫不必替換；補上受控管理 API 與完整訊息留存。真人從 OA Manager 發出的訊息與舊歷史不會自動回填。送出成功不是顧客已讀；人工 push 仍可能計入 LINE 訊息額度。
 
-本 repo 不含私有 ansai-line-ai 程式、客戶資料、雲端設定或秘密，也未變更正式服務。後端還沒有補齊與部署前，請保持 demo，勿對學員宣稱 live 已可用。
+本 repo 不含私有 ansai-line-ai 程式、客戶資料、雲端設定或秘密，也未變更正式服務。課堂環境須核對後端契約或相容 adapter；未完成時回報缺項，不以假資料宣稱 live 已可用。
 
 ## 驗證
 

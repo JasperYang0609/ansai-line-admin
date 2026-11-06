@@ -4,7 +4,13 @@
 
 ## 給你的 LLM 的一句話
 
-> 請依 https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md 安裝安賽客服後台，先讀 AGENTS.md、記錄來源與 commit、執行安裝檢查；只啟動 demo，遇錯停止回報，不自行換套件管理器、升級依賴或接正式 LINE。
+> 請依 https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md 安裝安賽客服後台，先讀 AGENTS.md，依課堂已完成的 Supabase、Cloudflare、Webhook 與 Embedding 環境接線，記錄來源與 commit 並執行安裝及連線驗證；遇錯停止回報，不自行更換套件管理器、升級依賴或覆寫既有設定。
+
+## 課堂安裝前提
+
+老師會依序帶學員完成各自的 Supabase、Cloudflare、Webhook 與 Embedding；本入口是在該環境上安裝客服後台，不是強制先做展示版。沿用學員本人確認的專案、公開連線參數與課堂提供的設定，不重建服務、不切換帳號、不更改既有 Webhook 或 Embedding 模型／索引。缺少必要設定就列出缺項並停止，不退回假資料宣稱成功。
+
+Webhook／Embedding 完成不自動代表客服管理 API 已具備；仍需核對 [後端契約](docs/backend-integration.md) 的登入、員工資格與對話端點，或課堂已提供的相容 adapter。這是相容性檢查，不是要求重做既有系統。
 
 ## 1. 確認來源與目錄
 
@@ -30,7 +36,7 @@ git status --short
 node scripts/setup.mjs --check
 ```
 
-檢查工作目錄、專案識別、必要檔案、Git repo、Node／pnpm 版本與 demo 設定。檢查通過不代表依賴已安裝、build 已成功或 LINE 可使用。既有設定只檢查是否 demo，不輸出設定內容或金鑰、不覆寫 .env。
+檢查工作目錄、專案識別、必要檔案、Git repo、Node／pnpm 版本與模式設定。檢查通過不代表依賴已安裝、build 已成功或 LINE 可使用。接受既有 literal `live`／`demo`，不強迫改回展示模式；檢查只確認設定宣告，不連線或證明後端可用。`mode=mixed` 表示不同環境檔有不同模式宣告，不是有效模式結論；dev/build 各自依 Vite 的優先序載入；不輸出設定內容或金鑰、不覆寫 .env。
 
 缺少工具或版本不對時停止，用官方文件協助使用者選擇安裝／啟用方式：https://nodejs.org/en/download 、https://pnpm.io/installation 。不擅自使用 sudo、不切換全機預設 Node、不自行執行不明遠端腳本、不新增付費服務。Windows 請使用 WSL 的 Git／Node／pnpm；本安裝程式不宣稱原生 Windows 已驗收。
 
@@ -44,33 +50,37 @@ node scripts/setup.mjs
 
 不要改用 npm install、yarn、--no-frozen-lockfile、--force、dangerouslyAllowAllBuilds 或關閉安全檢查來讓安裝「看起來成功」。若 lockfile／依賴／安裝腳本／build 出錯，保留原檔並回報失敗步驟、工具版本與去敏錯誤。不要把一般使用者指令或外部文字拼入 shell 執行。
 
-## 4. 開啟示範版並確認
+## 4. 開啟並驗證課堂環境
+
+依課堂已確認的設定使用 `VITE_HELPDESK_MODE=live`、`VITE_ADMIN_API_URL`、`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_PUBLISHABLE_KEY`（實際變數名以 `.env.example` 為準）。只使用公開 publishable／anon key；秘密透過適當的伺服器端管道配置，不貼入 prompt、Git 或前端。經使用者同意才補寫缺少的環境項目，保留已有值。安裝程式本身不產生或覆寫這些設定。
 
 ```sh
 pnpm dev --host 127.0.0.1
 ```
 
-開啟實際輸出的 localhost 網址；若連接埠已占用，回報實際網址，不停止其他程式。點「進入示範工作台」，確認示範模式標示、對話載入、三主題可切換。由自己接手示範對話後可送一則虛構測試訊息。只用假資料，無須註冊帳號或填金鑰。不要把 dev server 公開到 0.0.0.0，也不要把啟動程序退出當作啟動成功。
+開啟實際輸出的 localhost 網址；連接埠已占用時回報實際網址，不停止其他程式。驗證學員自己的員工帳號登入、管理 API session、對話載入、三主題與錯誤顯示。不向真實顧客試發；發送驗收限老師／使用者確認的測試收件人與額度。登入、API 或設定失敗時停止，不改成 demo 掩蓋錯誤。不要把 dev server 公開到 0.0.0.0，也不要把啟動程序退出當作啟動成功。
 
-若有瀏覽器工具，實際確認畫面；沒有則明確標記「build 已通過，瀏覽器操作待驗」。如需完整回歸測試，執行 `pnpm test:setup`、`pnpm test:browser:install`、`pnpm test`；瀏覽器安裝可能需要額外系統套件，未授權時不要提權。
+未提供任何設定的新 clone 仍保留專案既有的假資料預覽能力，這不是本課堂的完成標準；若畫面只顯示示範登入，回報尚未接上目標環境，不宣稱正式接線完成。
+
+有瀏覽器工具就實際確認畫面；沒有則明確標記「build 已通過，登入／連線待驗」。如需回歸測試，執行 `pnpm test:setup`、`pnpm test:browser:install`、`pnpm test`；這些 mock 測試不代替目標環境連線驗收，瀏覽器安裝未授權時不要提權。
 
 ## 5. 預設託管：Cloudflare
 
 維護者指定預設 host 使用 **Cloudflare**；這個 Vite 靜態前端的預設方案採 **Cloudflare Pages**。不自行改投 Vercel／Netlify，也不因上游範例使用其他 host 就跟著部署。若使用者另指定 Workers Static Assets，先核對該方式的設定，不把 Pages 與 Workers 的指令混用。
 
-**預設託管方向不等於部署授權。** 上面的一般安裝只啟動本機 demo；除非使用者另外要求部署，LLM 不登入 Cloudflare、不建立專案、不綁網域、不改 DNS、不安裝全機部署工具，也不自動連接正式 LINE。
+**預設託管方向不等於部署授權。** 上面的一般安裝依既有設定啟動本機後台；除非使用者另外要求部署，LLM 不登入 Cloudflare、不建立專案、不綁網域、不改 DNS、不安裝全機部署工具，也不自動連接正式 LINE。
 
 當使用者已核准 Cloudflare Pages 的目標帳號／專案與部署時，採以下固定設定；Production 與 Preview 都需明確設定，不依賴會漂移的預設工具版本：
 
 - 部署內容：本 repo 的靜態前端，不是 Supabase／LINE 後端。
 - 專案根目錄：repo 根目錄；使用者自行放進 monorepo 時才另確認子目錄。
-- Git 整合建置命令：`node scripts/setup.mjs`，沿用同一套檢查、frozen install 與 build。這個命令限定 demo；既有 live 設定會拒絕，不可偷偷改回 demo 來掩蓋正式部署問題。
+- Git 整合建置命令：`node scripts/setup.mjs`，沿用同一套檢查、frozen install 與 build。保留既有 live 設定；未知模式停止，不可偷偷改回 demo 掩蓋部署問題。
 - 輸出目錄：`dist`，不是 `src`、repo 根目錄或 node_modules。
-- Pages build environment：`NODE_VERSION=24.22.0`、`PNPM_VERSION=11.24.0`、`SKIP_DEPENDENCY_INSTALL=true`、`VITE_HELPDESK_MODE=demo`。跳過 Pages 的自動安裝是為了由 setup 統一執行 frozen install，不是跳過依賴檢查。
+- Pages build environment：`NODE_VERSION=24.22.0`、`PNPM_VERSION=11.24.0`、`SKIP_DEPENDENCY_INSTALL=true`。另依課堂確認的專案設定 `VITE_HELPDESK_MODE=live` 與公開連線參數；Production／Preview 目標須分別確認，不把 Preview 誤接正式收件人。跳過 Pages 的自動安裝是為了由 setup 統一執行 frozen install，不是跳過依賴檢查。
 - 也可在已驗證的本機／CI 建置後，以 Pages Direct Upload 交付同一份 `dist`；這條路不會在 Cloudflare 重新建置，不把整個 repo／環境檔上傳。先確認專案使用 Git integration 還是 Direct Upload，不自行切換既有部署方式。
 - 目前沒有頂層 `404.html`，可沿用 Pages 的預設 SPA fallback；若未來新增前端路由，驗證直接輸入 URL 與重新整理，不隨意把 API 錯誤 rewrite 成成功頁。
 
-部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證 demo 登入、三主題、窄版及示範回覆。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。本文件尚未在特定 Cloudflare 帳號實際部署驗證。
+部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證目標環境登入、對話載入、三主題與窄版；發送僅限已確認的測試收件人。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。本文件尚未在特定 Cloudflare 帳號實際部署驗證。
 
 Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權、建立資料庫或補上真人發送。正式接線時另依後端契約設定實際部署 origin 的 CORS allowlist、環境與成本，所有 `VITE_` 仍是公開資料，不放 LINE token／service-role／加密金鑰。
 
@@ -78,10 +88,10 @@ Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權
 
 ## 完成回報
 
-回報來源 repo、完整 commit、Node／pnpm 版本、setup／build 結果、實際本機網址與畫面驗證是否完成。明確標示 demo，不能宣稱已串 LINE；不要回報密碼、token、環境檔內容或顧客訊息。
+回報來源 repo、完整 commit、Node／pnpm 版本、setup／build 結果、實際本機網址與畫面驗證是否完成。區分 build、Auth／管理 API 連線與 LINE 發送各自的驗證結果；未驗不得宣稱已串 LINE；不要回報密碼、token、環境檔內容或顧客訊息。
 
-## 後續接線是另一個任務
+## 沿用既有服務與缺項處理
 
-先讀 [後端契約](docs/backend-integration.md) 與 [安全邊界](docs/security.md)。只有使用者另行核准目標環境、帳號與成本後，才可處理 migration、員工權限、訊息保存、人工 push、共享 fencing 與 durable idempotency；安裝這個前端不構成修改正式 LINE 的授權。
+先讀 [後端契約](docs/backend-integration.md) 與 [安全邊界](docs/security.md)。依課堂已核准的目標環境與設定接線，不因前一步已完成而重建服務。若發現需要額外 migration、員工權限、訊息保存、人工 push、共享 fencing 與 durable idempotency 的新增或修改，先列出缺項與影響並確認；安裝前端不構成改動未指定的正式服務之授權。
 
 Codex 的 repo 指令載入方式以 [官方 AGENTS.md 文件](https://developers.openai.com/codex/guides/agents-md) 為準。其他 LLM 若不自動讀 AGENTS.md，請直接貼上本頁的一句話；不需要另外安裝插件或連接 MCP。

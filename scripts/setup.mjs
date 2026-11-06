@@ -16,19 +16,21 @@ const envFiles = [
   '.env.production.local',
 ]
 
-export function assertDemo(source) {
+export function readModes(source) {
+  const modes = []
   for (const line of source.split(/\r?\n/)) {
     if (!/^\s*(?:export\s+)?VITE_HELPDESK_MODE\b/.test(line)) continue
-    if (
-      !/^\s*(?:export\s+)?VITE_HELPDESK_MODE\s*=\s*(?:demo|'demo'|"demo")\s*(?:#.*)?$/.test(
-        line
-      )
-    ) {
+    const match = line.match(
+      /^\s*(?:export\s+)?VITE_HELPDESK_MODE\s*=\s*(?:([a-z]+)|'([a-z]+)'|"([a-z]+)")\s*(?:#.*)?$/
+    )
+    const mode = match?.[1] ?? match?.[2] ?? match?.[3]
+    if (mode !== 'demo' && mode !== 'live')
       throw new Error(
-        '偵測到非 demo 或不明模式設定；保留原檔，請先由使用者確認。'
+        '不明模式設定；只接受 literal demo／live，保留原檔並停止。'
       )
-    }
+    modes.push(mode)
   }
+  return modes
 }
 
 function execute(command, args, { cwd, inherit = false }) {
@@ -91,19 +93,21 @@ export function runSetup({
   const pnpm = run('pnpm', ['--version'], { cwd: root })
   if (pnpm !== '11.24.0')
     throw new Error('需要 pnpm 11.24.0；保留 lockfile，不改用 npm/yarn。')
-  if (
-    env.VITE_HELPDESK_MODE !== undefined &&
-    env.VITE_HELPDESK_MODE !== 'demo'
-  ) {
-    throw new Error(
-      '環境模式不是 demo；請先由使用者確認，安裝不會改動既有設定。'
-    )
+  const modes = new Set()
+  if (env.VITE_HELPDESK_MODE !== undefined) {
+    if (!['demo', 'live'].includes(env.VITE_HELPDESK_MODE))
+      throw new Error('不明環境模式；保留原設定並停止。')
+    modes.add(env.VITE_HELPDESK_MODE)
   }
   for (const file of envFiles) {
     if (existsSync(resolve(root, file)))
-      assertDemo(readFileSync(resolve(root, file), 'utf8'))
+      for (const mode of readModes(readFileSync(resolve(root, file), 'utf8')))
+        modes.add(mode)
   }
-  const summary = { commit, node: nodeVersion, pnpm, mode: 'demo', dirty }
+  // Report declarations, not an effective-mode or connectivity claim: Vite applies
+  // different precedence for dev/build. Never rewrite either environment.
+  const mode = modes.size > 1 ? 'mixed' : ([...modes][0] ?? 'demo')
+  const summary = { commit, node: nodeVersion, pnpm, mode, dirty }
   log('安裝檢查通過 ' + JSON.stringify(summary))
   if (check) {
     log('僅檢查：未安裝套件、未建置、未改設定。')
@@ -116,7 +120,7 @@ export function runSetup({
   }
   run('pnpm', ['build'], { cwd: root, inherit: true })
   log(
-    '安裝與建置成功。下一步：pnpm dev --host 127.0.0.1；僅示範，尚未接 LINE。'
+    '安裝與建置成功。下一步：pnpm dev --host 127.0.0.1；請依既有環境驗證登入與 API，建置成功不代表 LINE 已接通。'
   )
   return summary
 }

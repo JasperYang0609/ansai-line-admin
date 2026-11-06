@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { assertDemo, runSetup } from './setup.mjs'
+import { readModes, runSetup } from './setup.mjs'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ansai-setup-test-'))
@@ -142,32 +142,40 @@ for (const file of [
   '.env.production',
   '.env.production.local',
 ])
-  test('existing live config fails closed: ' + file, (t) => {
+  test('existing live config is preserved and accepted: ' + file, (t) => {
     const f = fixture(t)
     writeFileSync(
       join(f.root, file),
       'VITE_HELPDESK_MODE=live\nTOKEN=private-fixture\n'
     )
-    assert.throws(() => runSetup(f), /非 demo/)
+    assert.equal(runSetup({ ...f, check: true }).mode, 'live')
     assert.ok(!f.calls.some((c) => c.options.inherit))
     assert.ok(readFileSync(join(f.root, file), 'utf8').includes('=live'))
     assert.ok(!f.logs.join('').includes('private-fixture'))
   })
 
-test('inherited non-demo env fails closed', (t) => {
+test('inherited unknown mode fails closed', (t) => {
   const f = fixture(t)
   assert.throws(
-    () => runSetup({ ...f, env: { VITE_HELPDESK_MODE: 'live' } }),
-    /不是 demo/
+    () => runSetup({ ...f, env: { VITE_HELPDESK_MODE: 'invalid' } }),
+    /不明環境模式/
   )
   assert.ok(!f.calls.some((c) => c.options.inherit))
 })
 
-test('accepts only literal demo assignments, never evaluates env content', () => {
-  for (const mode of ['demo', '"demo"', "'demo'", 'demo # comment'])
-    assert.doesNotThrow(() => assertDemo('export VITE_HELPDESK_MODE=' + mode))
+test('accepts only literal known modes, never evaluates env content', () => {
   for (const mode of [
+    'demo',
+    '"demo"',
+    "'demo'",
+    'demo # comment',
     'live',
+    '"live"',
+    "'live'",
+  ])
+    assert.doesNotThrow(() => readModes('export VITE_HELPDESK_MODE=' + mode))
+  for (const mode of [
+    'invalid',
     '',
     'DEMO',
     '$' + '{MODE}',
@@ -175,10 +183,8 @@ test('accepts only literal demo assignments, never evaluates env content', () =>
     'demo;echo bad',
     '"demo" trailing',
   ])
-    assert.throws(() => assertDemo('VITE_HELPDESK_MODE=' + mode), /非 demo/)
-  assert.doesNotThrow(() =>
-    assertDemo('# VITE_HELPDESK_MODE=live\nOTHER=value')
-  )
+    assert.throws(() => readModes('VITE_HELPDESK_MODE=' + mode), /不明模式/)
+  assert.doesNotThrow(() => readModes('# VITE_HELPDESK_MODE=live\nOTHER=value'))
 })
 
 test('install failure stops without build or retry', (t) => {
@@ -238,4 +244,34 @@ test('rejects nested Git root and native Windows', (t) => {
   const f = fixture(t)
   assert.throws(() => runSetup({ ...f, run: () => tmpdir() }), /Git 根目錄/)
   assert.throws(() => runSetup({ ...f, platform: 'win32' }), /WSL/)
+})
+
+test('inherited live installs/builds without downgrading or logging private values', (t) => {
+  const f = fixture(t)
+  const env = { VITE_HELPDESK_MODE: 'live', PRIVATE_TOKEN: 'private-fixture' }
+  assert.equal(runSetup({ ...f, env }).mode, 'live')
+  assert.equal(env.VITE_HELPDESK_MODE, 'live')
+  assert.equal(f.calls.filter((c) => c.options.inherit).length, 2)
+  assert.ok(!f.logs.join('').includes('private-fixture'))
+  assert.ok(!f.logs.join('').includes('僅示範'))
+})
+test('mixed dev/build declarations are reported without rewriting either file', (t) => {
+  const f = fixture(t)
+  writeFileSync(join(f.root, '.env.development'), 'VITE_HELPDESK_MODE=demo\n')
+  writeFileSync(join(f.root, '.env.production'), 'VITE_HELPDESK_MODE=live\n')
+  assert.equal(runSetup({ ...f, check: true }).mode, 'mixed')
+  assert.equal(
+    readFileSync(join(f.root, '.env.production'), 'utf8'),
+    'VITE_HELPDESK_MODE=live\n'
+  )
+})
+test('unknown file mode stops before installing and does not disclose content', (t) => {
+  const f = fixture(t)
+  writeFileSync(
+    join(f.root, '.env.production'),
+    'VITE_HELPDESK_MODE=private-fixture\n'
+  )
+  assert.throws(() => runSetup(f), /不明模式/)
+  assert.ok(!f.calls.some((c) => c.options.inherit))
+  assert.ok(!f.logs.join('').includes('private-fixture'))
 })
