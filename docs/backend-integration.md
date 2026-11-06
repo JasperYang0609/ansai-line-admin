@@ -2,6 +2,10 @@
 
 本文件是公開 DTO 契約，不是目前既有後端已具備的端點。API adapter 不會直接讀資料庫、不會發送 LINE，也不提供假的 live 成功。
 
+## 部署分工
+
+Cloudflare Pages 只託管前端；管理 API 的既定目標是使用者既有 Supabase 專案的 Edge Functions，不另要求 Cloudflare Worker 或 API 主機。API base 的探索順序與設定規則以 [INSTALL.md 的固定分工與接線探索](../INSTALL.md#固定分工與接線探索llm-必讀) 為準。這份契約不是實作；需先檢查原專案 Functions 與 handler 相容性，缺少功能時列出最小 adapter 範圍，不把缺少實作誤報成使用者沒提供網址。
+
 ## URL 與身分
 
 VITE_ADMIN_API_URL 指向受維護者控制的 HTTPS 管理 API base；其下提供以下相對路徑。VITE_SUPABASE_URL 指向所選 Supabase 專案。登入先呼叫 Supabase Auth，再以 user bearer 呼叫 GET /session 確認員工資格。一般 Auth 使用者不因此自動取得客服權限。前端不提供自行註冊／邀請權限。

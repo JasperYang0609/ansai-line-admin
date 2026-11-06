@@ -12,6 +12,34 @@
 
 Webhook／Embedding 完成不自動代表客服管理 API 已具備；仍需核對 [後端契約](docs/backend-integration.md) 的登入、員工資格與對話端點，或課堂已提供的相容 adapter。這是相容性檢查，不是要求重做既有系統。
 
+## 固定分工與接線探索（LLM 必讀）
+
+本課程的既定架構是 **Cloudflare Pages 僅前端 hosting；Supabase Edge Functions 提供後端管理 API**。Supabase 同時負責 Auth、資料庫與課堂既有的 Webhook／Embedding 整合；Embedding 模型與外部推論服務沿用課堂設定，不因此遷移。這是既定分工，不再詢問要選哪個 host，也不要求新增 Cloudflare Worker。
+
+```text
+客服瀏覽器 → Cloudflare Pages 載入後台
+客服後台   → Supabase Auth／管理 Edge Function
+LINE       → Supabase Webhook Edge Function
+```
+
+管理 API 是邏輯責任，不等於另一台主機或另一套服務。優先重用原 Supabase 專案的 Edge Functions；需要薄 adapter 才能對接時，先列出差異，不另架通用 API 平台。本 repo **只有前端與契約，沒有附上已部署的管理 API**；不可要求使用者憑空提供它的網址，也不可把不存在端點當成使用者漏填。
+
+### 先查再問，不捏造 API 網址
+
+- 先唯讀檢查使用者已指定的 LINE 專案：`supabase/config.toml`、`supabase/functions/`、handler 路由／action、migration 與 Auth／員工授權程式碼，及現有部署文件和公開設定的變數名稱。尊重不同 repo 的路徑差異，不讀其他學員／無關專案，不把環境內容或秘密輸出。
+- 已有可用授權工具才唯讀確認部署清單／設定，核對 project ref 與 function 名稱；沒有授權不自行登入、切帳號或索取管理秘密。先用已有本機證據，再一次彙整真正缺少的身份／路徑／權限，不能反覆只問「管理 API 的 HTTPS 網址是什麼」。
+- 常見 Edge Function URL 形狀為 `https://<project-ref>.supabase.co/functions/v1/<function-name>`；這只是格式，不是本專案已存在的端點。自訂網域以實際部署為準。
+- 比對 [後端契約](docs/backend-integration.md) 的 session／staff／conversations／messages／mode 與已部署的 handler、授權及回應。現有 action-based 函式不等於已支援本前端的 REST 路徑；選擇最小的伺服器薄 adapter 或前端 live adapter 對應，再依所需權限取得核准。
+- 若功能已存在且相容，才把確定的管理 API base 填入 `VITE_ADMIN_API_URL`。若不存在，輸出「缺少管理接線」及最小實作範圍，而不是要求找一個尚未部署的網址、不創造假成功、不直接部署。
+
+### 網址與前端設定不可混用
+
+- Cloudflare 網站 URL：人員開啟後台的網址，不是管理 API base。
+- `VITE_SUPABASE_URL`：Supabase 專案 base，Auth 與公開設定使用；不是把任何 Function URL 填到這裡。
+- `VITE_ADMIN_API_URL`：經核對、符合契約的 Supabase 管理函式 base；不是 LINE Webhook URL，不是 Cloudflare 網址，也不是單填 Supabase project base。
+- LINE Webhook URL：給 LINE 呼叫的入站端點；即使位於同一個 Supabase 專案，也不能直接當管理 API。只有服務端確實路由並實作管理功能時才可共用 handler。
+- 不新增 Worker／Wrangler 設定，不改既有 Webhook、Embedding、schema／RLS、DNS 或帳號來「讓安裝通過」。必要的後端實作、migration、部署、測試發送另按使用者核准範圍處理。
+
 ## 1. 確認來源與目錄
 
 官方來源只有 https://github.com/JasperYang0609/ansai-line-admin 。這不是 npm 發布套件，不要搜尋並安裝名稱相近的 npm 套件，也不要 clone 上游 shadcn-admin 當成安賽版本。

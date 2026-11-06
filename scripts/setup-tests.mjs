@@ -9,7 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { readModes, runSetup } from './setup.mjs'
+import { projectRoot, readModes, runSetup } from './setup.mjs'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ansai-setup-test-'))
@@ -274,4 +274,51 @@ test('unknown file mode stops before installing and does not disclose content', 
   assert.throws(() => runSetup(f), /不明模式/)
   assert.ok(!f.calls.some((c) => c.options.inherit))
   assert.ok(!f.logs.join('').includes('private-fixture'))
+})
+
+// Guard the two real onboarding regressions: invented API hosts and demo templates.
+test('classroom env template requires real connection values without inventing endpoints', () => {
+  const source = readFileSync(join(projectRoot, '.env.example'), 'utf8')
+  const entries = Object.fromEntries(
+    source
+      .split(/\r?\n/)
+      .filter((line) => /^VITE_[A-Z_]+=/.test(line))
+      .map((line) => [
+        line.slice(0, line.indexOf('=')),
+        line.slice(line.indexOf('=') + 1),
+      ])
+  )
+  assert.equal(entries.VITE_HELPDESK_MODE, 'live')
+  for (const key of [
+    'VITE_SUPABASE_URL',
+    'VITE_SUPABASE_PUBLISHABLE_KEY',
+    'VITE_ADMIN_API_URL',
+  ])
+    assert.equal(entries[key], '')
+  assert.ok(source.includes('不是 LINE Webhook URL'))
+  assert.ok(source.includes('不是 Cloudflare 網站 URL'))
+  assert.ok(
+    !Object.keys(entries).some((key) =>
+      /SECRET|TOKEN|SERVICE_ROLE|PASSWORD/.test(key)
+    )
+  )
+})
+test('canonical instructions fix hosting roles and require discovery before requesting an API URL', () => {
+  const install = readFileSync(join(projectRoot, 'INSTALL.md'), 'utf8')
+  const agents = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8')
+  const readme = readFileSync(join(projectRoot, 'README.md'), 'utf8')
+  const contract = readFileSync(
+    join(projectRoot, 'docs/backend-integration.md'),
+    'utf8'
+  )
+  assert.ok(install.includes('Cloudflare Pages 僅前端 hosting'))
+  assert.ok(install.includes('Supabase Edge Functions 提供後端管理 API'))
+  assert.ok(install.includes('supabase/functions/'))
+  assert.ok(install.includes('不可要求使用者憑空提供它的網址'))
+  assert.ok(agents.includes('不要求新增 Cloudflare Worker'))
+  assert.ok(contract.includes('契約不是實作'))
+  const prompt = (source) =>
+    source.split('\n').find((line) => line.startsWith('> 請依 '))
+  assert.equal(prompt(install), prompt(readme))
+  assert.ok(!install.includes('\u0000') && !install.includes('\u0001'))
 })

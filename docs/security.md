@@ -77,3 +77,7 @@ A02／A03／A05／A08／A10 的本次反例由 scripts/setup-tests.mjs 覆蓋：
 ## 2026-11-07 課堂既有環境校正
 
 此節取代安裝入口早先「僅 demo／live 一律拒絕」限制：老師會依序完成學員的 Supabase、Cloudflare、Webhook 與 Embedding，統一入口應沿用已確認的環境，不要求重走展示版。setup 接受 literal live 與 demo，未知／插值／指令內容仍停止且不執行、不輸出原值；不寫設定、不呼叫後端或 LINE、不改現有模式、不變更 Webhook 或索引。mixed 僅代表不同環境檔宣告，不是執行時優先序結論。新增反例驗證 live 保留、隱私不洩、mixed 保留與未知拒絕；安裝／build 成功不等於後端契約、Auth、RLS 或 LINE 已驗收，既有 live 安全要求不變。
+
+## 2026-11-07 託管角色與設定範本校正
+
+固定 Cloudflare Pages 僅前端 hosting／Supabase Edge Functions 後端；不因缺少管理 API 而另建 Worker。LLM 需先唯讀核對使用者指定的既有 Function 與權限，缺少實作時報最小接線差異，不憑空要求 API URL。.env.example 改為課堂 live 接線範本，公開 URL/key 留空；這不是覆寫既有環境或已完成管理 API 的證據。無設定的新 clone 執行行為不變，抄範本後缺項應明確失敗，不退 demo。新增反例驗證固定分工、先探索再問、網址不能混用、範本不得預填虛構端點或秘密。未改 API／Auth／RLS／部署／Webhook／Embedding。

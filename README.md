@@ -11,7 +11,7 @@
 
 安裝、啟動、工具版本與失敗處理統一以 [INSTALL.md](INSTALL.md) 為準；[AGENTS.md](AGENTS.md) 讓 repo 內的 coding agent 讀到相同入口。安裝程式會檢查目錄、版本及模式宣告，接受課堂既有的 live 設定，不會覆寫你的環境設定，也不會自動接線正式服務。
 
-預設 host 為 **Cloudflare**，此前端預設採 Cloudflare Pages；建置／輸出與部署確認事項集中於 [INSTALL.md](INSTALL.md#5-預設託管cloudflare)。本機安裝不會自動部署。
+固定分工：**Cloudflare Pages 僅前端 hosting，Supabase Edge Functions 提供管理 API**；不需要另外新增 Cloudflare Worker。LLM 必須先查既有專案與契約，不能把 Webhook URL 當管理 API 或索取不存在的 API 網址；接線規則以 [INSTALL.md](INSTALL.md#固定分工與接線探索llm-必讀) 為準。建置／輸出與部署確認事項集中於 [INSTALL.md](INSTALL.md#5-預設託管cloudflare)。本機安裝不會自動部署。
 
 ## 已有什麼
 
@@ -21,7 +21,7 @@
 - 示範登入、客服清單、接手／恢復 AI、版本衝突及錯誤回饋。
 - 從載入的資料計算基本數量；沒有假造 CSAT、SLA 或客服品質評分。
 - 透過 HelpdeskApi 隔開畫面與資料來源，可加入自己的模組。
-- 真實模式使用 Supabase Auth 與獨立後台 API；設定不完整會拒絕啟動，不會偷偷退回示範。
+- 真實模式使用 Supabase Auth 與 Supabase Edge Functions 的後台管理 API；設定不完整會拒絕啟動，不會偷偷退回示範。
 
 ## 架構與怎麼加功能
 
@@ -43,7 +43,7 @@ src/components/ui/            可直接修改的 shadcn 元件
 
 公開前端只放 Supabase publishable／anon key；**LINE token、service-role key、加密金鑰都只能留伺服器端**。瀏覽器送出的 authorId、tenantId 等不得作為權威。
 
-既有 LINE webhook／AI／知識庫不必替換；補上受控管理 API 與完整訊息留存。真人從 OA Manager 發出的訊息與舊歷史不會自動回填。送出成功不是顧客已讀；人工 push 仍可能計入 LINE 訊息額度。
+既有 LINE webhook／AI／知識庫不必替換；優先在同一 Supabase 專案重用／補上受控管理 API 與完整訊息留存。真人從 OA Manager 發出的訊息與舊歷史不會自動回填。送出成功不是顧客已讀；人工 push 仍可能計入 LINE 訊息額度。
 
 本 repo 不含私有 ansai-line-ai 程式、客戶資料、雲端設定或秘密，也未變更正式服務。課堂環境須核對後端契約或相容 adapter；未完成時回報缺項，不以假資料宣稱 live 已可用。
 
