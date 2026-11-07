@@ -135,3 +135,7 @@ Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權
 先讀 [後端契約](docs/backend-integration.md) 與 [安全邊界](docs/security.md)。依課堂已核准的目標環境與設定接線，不因前一步已完成而重建服務。若發現需要額外 migration、員工權限、訊息保存、人工 push、共享 fencing 與 durable idempotency 的新增或修改，先列出缺項與影響並確認；安裝前端不構成改動未指定的正式服務之授權。
 
 Codex 的 repo 指令載入方式以 [官方 AGENTS.md 文件](https://developers.openai.com/codex/guides/agents-md) 為準。其他 LLM 若不自動讀 AGENTS.md，請直接貼上本頁的一句話；不需要另外安裝插件或連接 MCP。
+
+## 人工發送預設
+
+預設及教學安裝不設每日人工發送上限。每分鐘防連點、重複請求去重與未知結果不自動重送，仍由後端保護。LINE 方案額度、AI 預算、收件人與員工權限各自管理，不因取消每日人工限制而放寬。
