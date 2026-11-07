@@ -4,6 +4,7 @@ import { page } from 'vitest/browser'
 import { ApiError, createDemoApi } from '../api'
 import { HelpdeskApp } from '../app'
 import '../app.css'
+import type { HelpdeskApi, Message } from '../types'
 
 async function openChat(api = createDemoApi()) {
   await page.viewport(1280, 800)
@@ -219,5 +220,387 @@ describe('客服工作台流程', () => {
     await expect
       .element(page.getByRole('button', { name: '開啟導覽選單' }))
       .toHaveFocus()
+  })
+})
+
+it('正式查閱顯示歷史範圍並隱藏接手、恢復和發送', async () => {
+  const demo = createDemoApi()
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        mode: 'live',
+        login: () => demo.login('teacher@example.test', ''),
+      }}
+    />
+  )
+  await page
+    .getByRole('textbox', { name: '電子郵件' })
+    .fill('agent@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('fixture-only')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await expect
+    .element(page.getByRole('note'))
+    .toHaveTextContent('部分舊訊息、AI 回覆與真人回覆可能未保存')
+  await expect
+    .element(page.getByRole('button', { name: '接手對話' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('button', { name: '交回 AI' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('button', { name: '送出訊息' }))
+    .not.toBeInTheDocument()
+})
+
+it('取得伺服器操作資格的正式員工能接手、輸入回覆及交回 AI', async () => {
+  const demo = createDemoApi()
+  const login = async () => {
+    const result = await demo.login('teacher@example.test', '')
+    return { ...result, staff: { ...result.staff, canReply: true } }
+  }
+  const send = vi.spyOn(demo, 'sendMessage')
+  await render(<HelpdeskApp api={{ ...demo, mode: 'live', login }} />)
+  await page
+    .getByRole('textbox', { name: '電子郵件' })
+    .fill('agent@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('fixture-only')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await page.getByRole('button', { name: '接手對話' }).click()
+  await page.getByRole('textbox', { name: '回覆訊息' }).fill('這是人工回覆')
+  await page.getByRole('button', { name: '送出訊息' }).click()
+  await expect
+    .element(page.getByRole('log').getByText('這是人工回覆', { exact: true }))
+    .toBeInTheDocument()
+  expect(send).toHaveBeenCalledTimes(1)
+  await page.getByRole('button', { name: '交回 AI' }).click()
+  await expect
+    .element(page.getByRole('button', { name: '接手對話' }))
+    .toBeInTheDocument()
+})
+
+it('等待客服的未分派對話可直接接手，不必先交回 AI', async () => {
+  const demo = createDemoApi()
+  const change = vi.spyOn(demo, 'setMode')
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        listConversations: async () =>
+          (await demo.listConversations()).map((c) =>
+            c.id === 'demo-2' ? { ...c, assignedTo: null } : c
+          ),
+      }}
+    />
+  )
+  await page.getByRole('button', { name: '進入示範工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：陳同學/ }).click()
+  await page.getByRole('button', { name: '接手對話' }).click()
+  expect(change).toHaveBeenCalledWith('demo-2', 'human', 1)
+})
+
+it('唯讀客服能載入超過三十天的 AI 與真人原文，讀到起點後保留已載入紀錄', async () => {
+  const demo = createDemoApi()
+  const recent = {
+    id: 'recent',
+    conversationId: 'demo-1',
+    body: '近期合成提問',
+    createdAt: '2026-11-01T00:00:00Z',
+    authorType: 'customer' as const,
+    authorName: '合成顧客',
+    status: 'received' as const,
+  }
+  const old = [
+    {
+      ...recent,
+      id: 'old-ai',
+      body: '六年前保存的 AI 原文',
+      createdAt: '2020-01-01T00:00:00Z',
+      authorType: 'ai' as const,
+      status: 'sent' as const,
+    },
+    {
+      ...recent,
+      id: 'old-agent',
+      body: '六年前保存的真人原文',
+      createdAt: '2020-01-02T00:00:00Z',
+      authorType: 'agent' as const,
+      status: 'sent' as const,
+    },
+  ]
+  const history = vi
+    .fn()
+    .mockResolvedValueOnce([recent])
+    .mockResolvedValueOnce(old)
+    .mockResolvedValueOnce([])
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        mode: 'live',
+        login: () => demo.login('teacher@example.test', ''),
+        listMessages: history,
+      }}
+    />
+  )
+  await page.getByRole('textbox', { name: '電子郵件' }).fill('a@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('合成密碼')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await page.getByRole('button', { name: '載入較早訊息' }).click()
+  expect(history).toHaveBeenLastCalledWith('demo-1', {
+    id: recent.id,
+    createdAt: recent.createdAt,
+  })
+  await expect
+    .element(page.getByRole('log').getByText(old[0].body, { exact: true }))
+    .toBeVisible()
+  await expect
+    .element(page.getByRole('log').getByText(old[1].body, { exact: true }))
+    .toBeVisible()
+  await page.getByRole('button', { name: '載入較早訊息' }).click()
+  await expect
+    .element(page.getByRole('button', { name: '載入較早訊息' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('log').getByText(old[0].body, { exact: true }))
+    .toBeInTheDocument()
+})
+
+function notificationFixture() {
+  const demo = createDemoApi()
+  let notify = () => {}
+  const stop = vi.fn()
+  const api: HelpdeskApi = {
+    ...demo,
+    mode: 'live',
+    login: async () => {
+      const session = await demo.login('teacher@example.test', '')
+      return { ...session, staff: { ...session.staff, canReply: true } }
+    },
+    subscribe: (changed, status) => {
+      notify = changed
+      status('connected')
+      return stop
+    },
+  }
+  return { api, notify: () => notify(), stop }
+}
+async function openNotificationChat(api: HelpdeskApi) {
+  await page.viewport(1280, 800)
+  await render(<HelpdeskApp api={api} />)
+  await page
+    .getByRole('textbox', { name: '電子郵件' })
+    .fill('fixture@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('合成密碼')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await page.getByRole('button', { name: '接手對話', exact: true }).click()
+}
+const notificationMessage = (id: string, body = id): Message => ({
+  id,
+  body,
+  conversationId: 'demo-1',
+  authorName: '合成顧客',
+  authorType: 'customer',
+  status: 'received',
+  createdAt: '2026-11-08T00:00:00Z',
+})
+
+describe('事件通知自動更新', () => {
+  it('員工發送資格撤回通知會更新成唯讀，不重建訂閱或丟失歷史', async () => {
+    const fixture = notificationFixture()
+    const subscribe = vi.spyOn(fixture.api, 'subscribe')
+    await openNotificationChat(fixture.api)
+    const person = (await fixture.api.listStaff()).find(
+      (item) => item.role === 'admin'
+    )!
+    fixture.api.getSession = async () => ({ ...person, canReply: false })
+    fixture.notify()
+    await expect
+      .element(page.getByText('正式紀錄 · 唯讀', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('textbox', { name: /回覆訊息/ }))
+      .not.toBeInTheDocument()
+    await expect.element(page.getByRole('log')).toBeInTheDocument()
+    expect(subscribe).toHaveBeenCalledTimes(1)
+  })
+  it('閒置超過五秒不查詢，有通知才合併更新，保留草稿且不發送', async () => {
+    const fixture = notificationFixture()
+    const { api } = fixture
+    const overview = vi.spyOn(api, 'listConversations')
+    const send = vi.spyOn(api, 'sendMessage')
+    const history = vi.spyOn(api, 'listMessages')
+    await openNotificationChat(api)
+    await page
+      .getByRole('textbox', { name: '回覆訊息', exact: true })
+      .fill('還沒寫完的草稿')
+    const calls = overview.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 5200))
+    expect(overview).toHaveBeenCalledTimes(calls)
+    history.mockResolvedValue([notificationMessage('通知新訊息')])
+    fixture.notify()
+    fixture.notify()
+    fixture.notify()
+    await expect
+      .element(page.getByRole('log').getByText('通知新訊息', { exact: true }))
+      .toBeInTheDocument()
+    expect(overview).toHaveBeenCalledTimes(calls + 1)
+    await expect
+      .element(page.getByRole('textbox', { name: '回覆訊息', exact: true }))
+      .toHaveValue('還沒寫完的草稿')
+    expect(send).not.toHaveBeenCalled()
+    await page.getByRole('button', { name: '登出', exact: true }).click()
+    expect(fixture.stop).toHaveBeenCalledTimes(1)
+    fixture.notify()
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(overview).toHaveBeenCalledTimes(calls + 1)
+  }, 15000)
+  it.each([401, 403])(
+    '背景讀取遇到 %s 會清除私密畫面與訂閱',
+    async (status) => {
+      const fixture = notificationFixture()
+      await openNotificationChat(fixture.api)
+      vi.spyOn(fixture.api, 'listConversations').mockRejectedValue(
+        new ApiError(503, '合成暫時故障')
+      )
+      vi.spyOn(fixture.api, 'listStaff').mockRejectedValue(
+        new ApiError(status, '合成資格撤銷')
+      )
+      fixture.notify()
+      await expect
+        .element(page.getByRole('button', { name: '登入工作台', exact: true }))
+        .toBeVisible()
+      expect(fixture.stop).toHaveBeenCalledTimes(1)
+      await expect.element(page.getByRole('log')).not.toBeInTheDocument()
+    }
+  )
+  it('未知發送結果不因新通知或已讀回資料而解鎖、重送', async () => {
+    const fixture = notificationFixture()
+    const send = vi
+      .spyOn(fixture.api, 'sendMessage')
+      .mockRejectedValue(new ApiError(0, '合成未知結果'))
+    await openNotificationChat(fixture.api)
+    await page
+      .getByRole('textbox', { name: '回覆訊息', exact: true })
+      .fill('不能重送的草稿')
+    await page.getByRole('button', { name: '送出訊息', exact: true }).click()
+    await expect
+      .element(page.getByRole('alert'))
+      .toHaveTextContent('發送結果待確認')
+    vi.spyOn(fixture.api, 'listMessages').mockResolvedValue([
+      notificationMessage('鎖定後的新提問'),
+    ])
+    fixture.notify()
+    await expect
+      .element(
+        page.getByRole('log').getByText('鎖定後的新提問', { exact: true })
+      )
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByRole('button', { name: '送出訊息', exact: true }))
+      .toBeDisabled()
+    await expect
+      .element(page.getByRole('button', { name: '交回 AI', exact: true }))
+      .toBeDisabled()
+    await expect
+      .element(page.getByRole('textbox', { name: /回覆訊息/ }))
+      .toHaveValue('不能重送的草稿')
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+  it('斷線空窗超過百則會補齊中段，保留較早歷史與閱讀位置', async () => {
+    const fixture = notificationFixture()
+    const old = Array.from({ length: 30 }, (_, i) => ({
+      ...notificationMessage('舊-' + i, '合成舊訊息' + i + '。'.repeat(120)),
+      createdAt: new Date(Date.UTC(2020, 0, 1, 0, 0, i)).toISOString(),
+    }))
+    const history = vi.spyOn(fixture.api, 'listMessages').mockResolvedValue(old)
+    await openNotificationChat(fixture.api)
+    const log = page.getByRole('log').element() as HTMLElement
+    log.scrollTop = 80
+    log.dispatchEvent(new Event('scroll'))
+    const newest = Array.from({ length: 100 }, (_, i) => ({
+      ...notificationMessage('新-' + i),
+      createdAt: new Date(Date.UTC(2026, 10, 8, 0, 0, i)).toISOString(),
+    }))
+    history.mockImplementation(async (_id, before) =>
+      before
+        ? [
+            old[old.length - 1],
+            {
+              ...notificationMessage('補齊中段'),
+              createdAt: '2025-01-01T00:00:00Z',
+            },
+          ]
+        : newest
+    )
+    fixture.notify()
+    await expect
+      .element(page.getByRole('log').getByText('補齊中段', { exact: true }))
+      .toBeInTheDocument()
+    await expect
+      .element(page.getByRole('log').getByText(old[0].body, { exact: true }))
+      .toBeInTheDocument()
+    expect(log.scrollTop).toBe(80)
+    expect(history).toHaveBeenLastCalledWith('demo-1', {
+      id: newest[0].id,
+      createdAt: newest[0].createdAt,
+    })
+  })
+  it('讀取中的通知不遺失，切換對話後不混入舊資料', async () => {
+    const fixture = notificationFixture()
+    await openNotificationChat(fixture.api)
+    const original = fixture.api.listMessages
+    let resolve!: (value: Message[]) => void
+    const waiting = new Promise<Message[]>((done) => {
+      resolve = done
+    })
+    const history = vi
+      .spyOn(fixture.api, 'listMessages')
+      .mockImplementation((id) => (id === 'demo-1' ? waiting : original(id)))
+    fixture.notify()
+    await vi.waitFor(() => expect(history).toHaveBeenCalled())
+    await page.getByRole('button', { name: /示範顧客：陳同學/ }).click()
+    fixture.notify()
+    resolve([notificationMessage('晚到不可混入')])
+    await expect
+      .element(page.getByRole('heading', { name: '示範顧客：陳同學' }))
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('log').getByText('晚到不可混入', { exact: true }))
+      .not.toBeInTheDocument()
+    await vi.waitFor(() =>
+      expect(history.mock.calls.some(([id]) => id === 'demo-2')).toBe(true)
+    )
+  })
+  it('通知故障保留既有資料與草稿，回到頁面後可補讀', async () => {
+    const fixture = notificationFixture()
+    await openNotificationChat(fixture.api)
+    await page
+      .getByRole('textbox', { name: '回覆訊息', exact: true })
+      .fill('不能丟的草稿')
+    const history = vi
+      .spyOn(fixture.api, 'listMessages')
+      .mockRejectedValueOnce(new ApiError(503, '合成暫時故障'))
+      .mockResolvedValue([notificationMessage('恢復連線後補讀')])
+    fixture.notify()
+    await expect
+      .element(
+        page.getByText('即時連線中斷，恢復連線後自動補讀', { exact: false })
+      )
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('textbox', { name: '回覆訊息', exact: true }))
+      .toHaveValue('不能丟的草稿')
+    window.dispatchEvent(new Event('focus'))
+    await expect
+      .element(
+        page.getByRole('log').getByText('恢復連線後補讀', { exact: true })
+      )
+      .toBeInTheDocument()
+    expect(history).toHaveBeenCalledTimes(2)
   })
 })

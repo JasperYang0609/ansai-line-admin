@@ -136,7 +136,7 @@ export function SettingsPage({ demo }: { demo: boolean }) {
         <p>
           {demo
             ? '顧客、客服與訊息皆為示範資料，重新整理頁面後會重設。'
-            : '登入與操作由後端驗證；LINE 是否送達以後端回傳狀態為準。'}
+            : '登入與查閱由後端驗證。目前只開放已保存紀錄查閱，接手、恢復 AI 與人工發送留待後續。'}
         </p>
         <p className='surface-note'>
           連線設定由專案管理員維護，此頁不會變更設定。

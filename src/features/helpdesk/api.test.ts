@@ -1,9 +1,13 @@
+import { RealtimeClient, type RealtimeChannel } from '@supabase/realtime-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDemoApi, createHelpdeskApi, createLiveApi } from './api'
 
 const key = 'sb_publishable_classroom_fake'
 const id = () => crypto.randomUUID()
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 describe('明確分離示範與真實模式', () => {
   it('預設為示範，未知與不完整 live 設定不降級', () => {
     expect(createHelpdeskApi({}).mode).toBe('demo')
@@ -137,29 +141,131 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
       'Bearer test-user-token'
     )
   })
-  it('只傳正文、版本與 requestId，不由瀏覽器指定租戶或作者', async () => {
-    const returned = {
+  it('即時訂閱使用服務端頻道與員工憑證，重連補讀，登出後忽略晚到通知', async () => {
+    const topic = `helpdesk:${id()}:${id()}:${id()}`
+    const { api, fetcher } = fixture([
+      Response.json({ topic }),
+      new Response(null, { status: 204 }),
+    ])
+    let receive = () => {}
+    let subscribed = (state: string) => {
+      void state
+    }
+    const channel = {
+      on: vi.fn((_type: string, _filter: unknown, callback: () => void) => {
+        receive = callback
+        return channel
+      }),
+      subscribe: vi.fn((callback: (state: string) => void) => {
+        subscribed = callback
+        return channel
+      }),
+    }
+    const channelSpy = vi
+      .spyOn(RealtimeClient.prototype, 'channel')
+      .mockReturnValue(channel as unknown as RealtimeChannel)
+    const authSpy = vi
+      .spyOn(RealtimeClient.prototype, 'setAuth')
+      .mockResolvedValue()
+    const disconnect = vi
+      .spyOn(RealtimeClient.prototype, 'disconnect')
+      .mockResolvedValue('ok')
+    await api.login('fixture@example.test', '合成密碼')
+    const changed = vi.fn(),
+      status = vi.fn()
+    const stop = api.subscribe!(changed, status)
+    await vi.waitFor(() =>
+      expect(channelSpy).toHaveBeenCalledWith(topic, {
+        config: { private: true },
+      })
+    )
+    expect(fetcher.mock.calls[2][0]).toBe('https://admin.example.test/events')
+    expect(authSpy).toHaveBeenCalledWith('test-user-token')
+    subscribed('SUBSCRIBED')
+    receive()
+    subscribed('CHANNEL_ERROR')
+    subscribed('SUBSCRIBED')
+    expect(changed).toHaveBeenCalledTimes(3)
+    expect(status).toHaveBeenLastCalledWith('connected')
+    await api.logout()
+    receive()
+    subscribed('SUBSCRIBED')
+    expect(changed).toHaveBeenCalledTimes(3)
+    expect(disconnect).toHaveBeenCalled()
+    stop()
+  })
+  it('訂閱資格失敗不使用公開頻道，也不直接讀取客戶資料表', async () => {
+    const { api, fetcher } = fixture([new Response(null, { status: 403 })])
+    const channel = vi.spyOn(RealtimeClient.prototype, 'channel')
+    await api.login('fixture@example.test', '合成密碼')
+    const changed = vi.fn(),
+      status = vi.fn()
+    api.subscribe!(changed, status)
+    await vi.waitFor(() => expect(status).toHaveBeenLastCalledWith('error'))
+    expect(channel).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(
+      fetcher.mock.calls.every(([url]) => !String(url).includes('/rest/'))
+    ).toBe(true)
+  })
+  it('正式模式使用伺服器接手與發送端點，不傳作者或租戶', async () => {
+    const conversation = {
+      id: 'c',
+      customerName: '合成顧客',
+      preview: '',
+      updatedAt: new Date().toISOString(),
+      mode: 'human',
+      version: 4,
+      assignedTo: who.id,
+      unread: 0,
+      tags: [],
+    }
+    const message = {
       id: 'm',
       conversationId: 'c',
       body: '測試',
-      createdAt: '2026-01-01',
+      createdAt: new Date().toISOString(),
       authorType: 'agent',
       authorName: who.name,
-      status: 'queued',
+      status: 'sent',
     }
-    const { api, fetcher } = fixture([Response.json(returned)])
+    const { api, fetcher } = fixture([
+      Response.json(conversation),
+      Response.json(message),
+      Response.json({ ...conversation, mode: 'ai', version: 5 }),
+    ])
     await api.login('agent@example.test', 'fake-password')
+    await api.setMode('c', 'human', 3)
     const requestId = id()
-    expect((await api.sendMessage('c', '測試', 3, requestId)).status).toBe(
-      'queued'
+    await api.sendMessage('c', ' 測試 ', 4, requestId)
+    await api.setMode('c', 'ai', 4)
+    expect(fetcher.mock.calls[2][0]).toBe(
+      'https://admin.example.test/conversations/c/mode'
     )
+    expect(fetcher.mock.calls[2][1].method).toBe('POST')
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({
-      body: '測試',
+      mode: 'human',
       expectedVersion: 3,
+    })
+    expect(JSON.parse(fetcher.mock.calls[3][1].body)).toEqual({
+      body: '測試',
+      expectedVersion: 4,
       requestId,
     })
-    expect(fetcher.mock.calls[2][1].redirect).toBe('error')
-    expect(fetcher.mock.calls[2][1].credentials).toBe('omit')
+    expect(fetcher).toHaveBeenCalledTimes(5)
+  })
+  it('人工發送的逾時、5xx 與格式錯誤都只發出一次請求', async () => {
+    for (const response of [
+      new Response('', { status: 503 }),
+      Response.json({ wrong: true }),
+    ]) {
+      const { api, fetcher } = fixture([response])
+      await api.login('agent@example.test', 'fake-password')
+      await expect(
+        api.sendMessage('c', '人工回覆', 1, id())
+      ).rejects.toMatchObject({ status: expect.any(Number) })
+      expect(fetcher).toHaveBeenCalledTimes(3)
+    }
   })
   it('401 清除 session，之後不能繼續呼叫', async () => {
     const { api, fetcher } = fixture([new Response('', { status: 401 })])
@@ -171,7 +277,7 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
   it('409 不重試，不變成示範成功', async () => {
     const { api, fetcher } = fixture([new Response('', { status: 409 })])
     await api.login('agent@example.test', 'fake-password')
-    await expect(api.sendMessage('c', '一次', 0, id())).rejects.toMatchObject({
+    await expect(api.listMessages('c')).rejects.toMatchObject({
       status: 409,
     })
     expect(fetcher).toHaveBeenCalledTimes(3)
@@ -203,4 +309,39 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
     await api.logout()
     await expect(api.listConversations()).rejects.toMatchObject({ status: 401 })
   })
+})
+
+it('較早歷史使用原始時間與識別碼游標，不把微秒時間截斷', async () => {
+  const calls = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ access_token: '合成登入權杖' }))
+    .mockResolvedValueOnce(
+      Response.json({
+        id: 'a',
+        name: '合成客服',
+        email: 'a@example.test',
+        role: 'agent',
+      })
+    )
+    .mockResolvedValueOnce(Response.json([]))
+  vi.stubGlobal('fetch', calls)
+  const api = createLiveApi(
+    'https://admin.example.test',
+    'https://project.supabase.co',
+    key
+  )
+  await api.login('a@example.test', '合成密碼')
+  const before = {
+    createdAt: '2020-01-01T00:00:00.123456+00:00',
+    id: '80000000-0000-4000-8000-000000000001',
+  }
+  await api.listMessages('c', before)
+  const url = new URL(calls.mock.calls[2][0])
+  expect(url.searchParams.get('beforeAt')).toBe(before.createdAt)
+  expect(url.searchParams.get('beforeId')).toBe(before.id)
+  expect(calls.mock.calls[2][1].method).toBe('GET')
+  await expect(
+    api.listMessages('c', { ...before, createdAt: '錯誤時間' })
+  ).rejects.toMatchObject({ status: 400 })
+  expect(calls).toHaveBeenCalledTimes(3)
 })

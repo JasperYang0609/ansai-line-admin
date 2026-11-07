@@ -3,6 +3,7 @@ export type Staff = {
   name: string
   email: string
   role: 'admin' | 'agent'
+  canReply?: boolean
 }
 export type Session = { accessToken: string; staff: Staff }
 export type Message = {
@@ -21,6 +22,7 @@ export type Message = {
     | 'unknown'
     | 'cancelled'
 }
+export type HistoryCursor = Pick<Message, 'id' | 'createdAt'>
 export type Conversation = {
   id: string
   customerName: string
@@ -34,10 +36,18 @@ export type Conversation = {
 }
 export interface HelpdeskApi {
   readonly mode: 'demo' | 'live'
+  getSession?: () => Promise<Staff>
+  subscribe?: (
+    changed: () => void,
+    status: (state: 'connected' | 'connecting' | 'error') => void
+  ) => () => void
   login(email: string, password: string): Promise<Session>
   logout(): Promise<void>
   listConversations(): Promise<Conversation[]>
-  listMessages(conversationId: string): Promise<Message[]>
+  listMessages(
+    conversationId: string,
+    before?: HistoryCursor
+  ): Promise<Message[]>
   sendMessage(
     conversationId: string,
     body: string,

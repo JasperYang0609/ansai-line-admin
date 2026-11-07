@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RealtimeClient } from '@supabase/realtime-js'
 import type {
   Conversation,
   HelpdeskApi,
@@ -12,6 +13,7 @@ const staffSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: z.enum(['admin', 'agent']),
+  canReply: z.boolean().optional(),
 })
 const conversationSchema = z.object({
   id: z.string().min(1),
@@ -95,7 +97,7 @@ function publicKey(key: string) {
       ) as { role?: string }
       if (payload.role === 'anon') return key
     } catch {
-      /* not a public legacy JWT */
+      /* 無法解讀的舊式憑證不視為公開金鑰。 */
     }
   }
   throw new Error('僅能使用 Supabase publishable／anon key，不可放入管理金鑰。')
@@ -238,9 +240,17 @@ export function createDemoApi(): HelpdeskApi {
       signedIn()
       return structuredClone(conversations)
     },
-    async listMessages(id) {
+    async listMessages(id, before) {
       find(id)
-      return structuredClone(messages.filter((m) => m.conversationId === id))
+      return structuredClone(
+        messages.filter(
+          (m) =>
+            m.conversationId === id &&
+            (!before ||
+              m.createdAt < before.createdAt ||
+              (m.createdAt === before.createdAt && m.id < before.id))
+        )
+      )
     },
     async listStaff() {
       signedIn()
@@ -314,6 +324,7 @@ export function createLiveApi(
   const key = publicKey(publishableKey)
   let token = ''
   let sessionGeneration = 0
+  let stopNotifications: (() => void) | undefined
   async function request(
     url: string,
     init: RequestInit = {},
@@ -382,18 +393,21 @@ export function createLiveApi(
       throw new ApiError(502, '後端回傳格式不正確或過大，請核對操作結果。')
     }
   }
-  async function call(path: string, data?: unknown): Promise<unknown> {
+  async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     if (!token) throw new ApiError(401, '請先登入。')
     const generation = sessionGeneration
-    return request(
+    const result = await request(
       base + path,
       {
-        method: data === undefined ? 'GET' : 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: data === undefined ? undefined : JSON.stringify(data),
+        ...init,
+        method: init.method ?? 'GET',
+        headers: { apikey: key, Authorization: 'Bearer ' + token },
       },
       generation
     )
+    if (generation !== sessionGeneration)
+      throw new ApiError(409, '登入狀態已變更。')
+    return result
   }
   const segment = (id: string) => {
     if (
@@ -410,7 +424,65 @@ export function createLiveApi(
   }
   return {
     mode: 'live',
+    async getSession() {
+      return parse(staffSchema, await call('/session'))
+    },
+    subscribe(changed, status) {
+      stopNotifications?.()
+      let stopped = false
+      let client: RealtimeClient | undefined
+      const generation = sessionGeneration
+      const stop = () => {
+        stopped = true
+        void client?.disconnect()
+      }
+      stopNotifications = stop
+      status('connecting')
+      void (async () => {
+        // 頻道範圍由管理 API 決定，不接受前端自行選擇租戶或員工。
+        const { topic } = parse(
+          z.object({
+            topic: z
+              .string()
+              .regex(/^helpdesk:[0-9a-f-]{36}:[0-9a-f-]{36}:[0-9a-f-]{36}$/),
+          }),
+          await call('/events')
+        )
+        if (stopped || generation !== sessionGeneration) return
+        client = new RealtimeClient(
+          authBase.replace(/^http/, 'ws') + '/realtime/v1',
+          {
+            params: { apikey: key },
+            accessToken: async () =>
+              generation === sessionGeneration ? token || null : null,
+          }
+        )
+        await client.setAuth(token)
+        if (stopped || generation !== sessionGeneration) {
+          stop()
+          return
+        }
+        client
+          .channel(topic, { config: { private: true } })
+          .on('broadcast', { event: 'changed' }, () => {
+            if (!stopped && generation === sessionGeneration) changed()
+          })
+          .subscribe((state) => {
+            if (stopped || generation !== sessionGeneration) return
+            status(state === 'SUBSCRIBED' ? 'connected' : 'error')
+            // 建立或恢復訂閱後補讀一次，補上斷線及首次載入的空窗。
+            if (state === 'SUBSCRIBED') changed()
+          })
+      })().catch(() => {
+        if (!stopped && generation === sessionGeneration) {
+          status('error')
+          changed()
+        }
+      })
+      return stop
+    },
     async login(email, password): Promise<Session> {
+      stopNotifications?.()
       const generation = ++sessionGeneration
       token = ''
       if (!email.trim() || !password)
@@ -437,6 +509,7 @@ export function createLiveApi(
       }
     },
     async logout() {
+      stopNotifications?.()
       const old = token
       const generation = ++sessionGeneration
       token = ''
@@ -456,35 +529,52 @@ export function createLiveApi(
         await call('/conversations')
       )
     },
-    async listMessages(id) {
+    async listMessages(id, before) {
+      if (
+        before &&
+        (!Number.isFinite(Date.parse(before.createdAt)) || !before.id)
+      )
+        throw new ApiError(400, '歷史分頁位置無效。')
+      const query = before
+        ? '?' +
+          new URLSearchParams({
+            beforeAt: before.createdAt,
+            beforeId: segment(before.id),
+          })
+        : ''
       return parse(
         z.array(messageSchema).max(100),
-        await call('/conversations/' + segment(id) + '/messages')
+        await call('/conversations/' + segment(id) + '/messages' + query)
       )
     },
     async listStaff() {
       return parse(z.array(staffSchema).max(100), await call('/staff'))
     },
-    async sendMessage(id, body, expectedVersion, requestId) {
+    async sendMessage(id, body, version, requestId) {
       const text = requiredBody(body)
-      validVersion(expectedVersion)
+      validVersion(version)
       validRequestId(requestId)
       return parse(
         messageSchema,
         await call('/conversations/' + segment(id) + '/messages', {
-          body: text,
-          expectedVersion,
-          requestId,
+          method: 'POST',
+          body: JSON.stringify({
+            body: text,
+            expectedVersion: version,
+            requestId,
+          }),
         })
       )
     },
-    async setMode(id, mode, expectedVersion) {
-      validVersion(expectedVersion)
+    async setMode(id, mode, version) {
+      validVersion(version)
+      if (!['ai', 'human'].includes(mode))
+        throw new ApiError(400, '接待模式無效。')
       return parse(
         conversationSchema,
         await call('/conversations/' + segment(id) + '/mode', {
-          mode,
-          expectedVersion,
+          method: 'POST',
+          body: JSON.stringify({ mode, expectedVersion: version }),
         })
       )
     },

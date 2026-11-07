@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import {
   ArrowLeft,
   Bot,
@@ -26,6 +26,7 @@ export function ConversationList({
   onQuery,
   onFilter,
   onSelect,
+  syncStatus,
 }: {
   conversations: Conversation[]
   selectedId: string | null
@@ -35,6 +36,7 @@ export function ConversationList({
   onQuery: (value: string) => void
   onFilter: (value: string) => void
   onSelect: (id: string) => void
+  syncStatus?: string
 }) {
   const visible = conversations.filter(
     (c) =>
@@ -125,7 +127,7 @@ export function ConversationList({
         )}
       </div>
       <div className='list-footer'>
-        {visible.length} 段對話 · 使用重新整理取得最新內容
+        {visible.length} 段對話 · {syncStatus ?? '示範資料'}
       </div>
     </section>
   )
@@ -157,6 +159,9 @@ export function ChatPanel({
   loading,
   pending,
   sendBlocked,
+  readOnly,
+  canLoadEarlier,
+  onLoadEarlier,
   draft,
   onDraft,
   onSend,
@@ -170,16 +175,42 @@ export function ChatPanel({
   loading: boolean
   pending: boolean
   sendBlocked: boolean
+  readOnly: boolean
+  canLoadEarlier: boolean
+  onLoadEarlier: () => void
   draft: string
   onDraft: (value: string) => void
   onSend: () => void
   onMode: (mode: 'ai' | 'human') => void
   onBack: () => void
 }) {
-  const end = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    end.current?.scrollIntoView({ block: 'nearest' })
-  }, [conversation?.id, messages.length])
+  const history = useRef<HTMLDivElement>(null)
+  const position = useRef({
+    conversationId: '',
+    firstId: '',
+    height: 0,
+    top: 0,
+    follow: true,
+  })
+  useLayoutEffect(() => {
+    const element = history.current
+    if (!element) return
+    const previous = position.current
+    const changedConversation = previous.conversationId !== conversation?.id
+    // 正在往上閱讀時保留位置；只有原本在底部，才跟隨新訊息。
+    if (changedConversation || previous.follow)
+      element.scrollTop = element.scrollHeight
+    else if (previous.firstId !== messages[0]?.id)
+      element.scrollTop = previous.top + element.scrollHeight - previous.height
+    position.current = {
+      conversationId: conversation?.id ?? '',
+      firstId: messages[0]?.id ?? '',
+      height: element.scrollHeight,
+      top: element.scrollTop,
+      follow:
+        element.scrollHeight - element.scrollTop - element.clientHeight < 80,
+    }
+  })
   if (!conversation)
     return (
       <section className='chat-panel chat-empty'>
@@ -193,8 +224,10 @@ export function ChatPanel({
   const owner = staff.find((p) => p.id === conversation.assignedTo)
   const canManage =
     conversation.mode === 'ai' ||
+    !conversation.assignedTo ||
     conversation.assignedTo === currentStaff.id ||
     currentStaff.role === 'admin'
+  const needsClaim = conversation.mode === 'ai' || !conversation.assignedTo
   const canSend =
     !sendBlocked &&
     conversation.mode === 'human' &&
@@ -225,47 +258,82 @@ export function ChatPanel({
         </div>
         <ModeBadge mode={conversation.mode} />
       </header>
-      <div className='handoff-bar'>
-        <span>
-          {conversation.mode === 'ai'
-            ? '需要時，讓真人接棒。'
-            : '真人處理中，AI 暫停回覆。'}
-        </span>
-        <button
-          className='small-button'
-          disabled={pending || sendBlocked || !canManage}
-          onClick={() => onMode(conversation.mode === 'ai' ? 'human' : 'ai')}
-        >
-          {pending
-            ? '處理中…'
-            : conversation.mode === 'ai'
-              ? '接手對話'
-              : '交回 AI'}
-        </button>
-        {conversation.mode === 'human' &&
-          conversation.assignedTo !== currentStaff.id &&
-          currentStaff.role === 'admin' && (
-            <button
-              className='small-button'
-              disabled={pending || sendBlocked}
-              onClick={() => onMode('human')}
-            >
-              由我接手
-            </button>
-          )}
-      </div>
+      {!readOnly && (
+        <div className='handoff-bar' role='note'>
+          已保存的正文長期保留，可載入較早紀錄。舊 AI
+          回覆與官方帳號後台的人工回覆可能未保存。
+        </div>
+      )}
+      {readOnly ? (
+        <div className='handoff-bar' role='note'>
+          已保存的正文長期保留，可載入較早紀錄。部分舊訊息、AI
+          回覆與真人回覆可能未保存。
+        </div>
+      ) : (
+        <div className='handoff-bar'>
+          <span>
+            {conversation.mode === 'ai'
+              ? '需要時，讓真人接棒。'
+              : '真人處理中，AI 暫停回覆。'}
+          </span>
+          <button
+            className='small-button'
+            disabled={pending || sendBlocked || !canManage}
+            onClick={() => onMode(needsClaim ? 'human' : 'ai')}
+          >
+            {pending ? '處理中…' : needsClaim ? '接手對話' : '交回 AI'}
+          </button>
+          {conversation.mode === 'human' &&
+            conversation.assignedTo !== null &&
+            conversation.assignedTo !== currentStaff.id &&
+            currentStaff.role === 'admin' && (
+              <button
+                className='small-button'
+                disabled={pending || sendBlocked}
+                onClick={() => onMode('human')}
+              >
+                由我接手
+              </button>
+            )}
+        </div>
+      )}
       <div
         className='message-history'
+        ref={history}
+        onScroll={(event) => {
+          const element = event.currentTarget
+          position.current = {
+            ...position.current,
+            top: element.scrollTop,
+            height: element.scrollHeight,
+            follow:
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              80,
+          }
+        }}
         role='log'
         aria-label='訊息紀錄'
         aria-busy={loading}
       >
-        {loading ? (
+        {canLoadEarlier && (
+          <button
+            className='small-button'
+            disabled={loading || pending}
+            onClick={onLoadEarlier}
+          >
+            {loading ? '載入中…' : '載入較早訊息'}
+          </button>
+        )}
+        {loading && !messages.length ? (
           <p className='empty-state' role='status'>
             正在載入訊息…
           </p>
         ) : !messages.length ? (
-          <p className='empty-state'>這段對話還沒有訊息。</p>
+          <p className='empty-state'>
+            {readOnly
+              ? '這段對話目前沒有可顯示的保存紀錄。'
+              : '這段對話還沒有訊息。'}
+          </p>
         ) : (
           messages.map((m) => (
             <article key={m.id} className={'message-row ' + m.authorType}>
@@ -296,50 +364,53 @@ export function ChatPanel({
             </article>
           ))
         )}
-        <div ref={end} />
       </div>
-      <form
-        className='composer'
-        onSubmit={(e) => {
-          e.preventDefault()
-          onSend()
-        }}
-      >
-        <label htmlFor='reply'>
-          回覆訊息
-          {!canSend && (
-            <span>
-              {sendBlocked ? ' · 發送結果待確認，暫停重送' : ' · 請先接手對話'}
-            </span>
-          )}
-        </label>
-        <textarea
-          id='reply'
-          placeholder={
-            sendBlocked
-              ? '請管理員確認上一則發送結果'
-              : canSend
-                ? '輸入給顧客的訊息…'
-                : '接手後即可輸入回覆'
-          }
-          value={draft}
-          disabled={!canSend || pending || loading}
-          onChange={(e) => onDraft(e.target.value)}
-          rows={3}
-          maxLength={10000}
-        />
-        <div className='composer-bottom'>
-          <span>已受理不代表顧客已讀</span>
-          <button
-            className='primary-button'
-            disabled={!canSend || pending || loading || !draft.trim()}
-            type='submit'
-          >
-            <Send size={16} />
-            {pending ? '處理中…' : '送出訊息'}
-          </button>
-        </div>
-      </form>
+      {!readOnly && (
+        <form
+          className='composer'
+          onSubmit={(e) => {
+            e.preventDefault()
+            onSend()
+          }}
+        >
+          <label htmlFor='reply'>
+            回覆訊息
+            {!canSend && (
+              <span>
+                {sendBlocked
+                  ? ' · 發送結果待確認，暫停重送'
+                  : ' · 請先接手對話'}
+              </span>
+            )}
+          </label>
+          <textarea
+            id='reply'
+            placeholder={
+              sendBlocked
+                ? '請管理員確認上一則發送結果'
+                : canSend
+                  ? '輸入給顧客的訊息…'
+                  : '接手後即可輸入回覆'
+            }
+            value={draft}
+            disabled={!canSend || pending || loading}
+            onChange={(e) => onDraft(e.target.value)}
+            rows={3}
+            maxLength={10000}
+          />
+          <div className='composer-bottom'>
+            <span>已受理不代表顧客已讀</span>
+            <button
+              className='primary-button'
+              disabled={!canSend || pending || loading || !draft.trim()}
+              type='submit'
+            >
+              <Send size={16} />
+              {pending ? '處理中…' : '送出訊息'}
+            </button>
+          </div>
+        </form>
+      )}
     </section>
   )
 }

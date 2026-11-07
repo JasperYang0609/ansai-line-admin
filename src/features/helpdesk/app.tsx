@@ -20,7 +20,13 @@ import {
 } from './components/modules'
 import { ThemeSelector } from './theme'
 import { useHelpdeskTheme, type HelpdeskTheme } from './theme-preference'
-import type { Conversation, HelpdeskApi, Message, Staff } from './types'
+import type {
+  Conversation,
+  HelpdeskApi,
+  HistoryCursor,
+  Message,
+  Staff,
+} from './types'
 
 type Tab = 'inbox' | 'staff' | 'reports' | 'settings' | 'learning'
 const navigation = [
@@ -209,14 +215,30 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [messageLoading, setMessageLoading] = useState(false)
+  const [historyStartReached, setHistoryStartReached] = useState<
+    Record<string, boolean>
+  >({})
   const [pending, setPending] = useState(false)
+  const [syncState, setSyncState] = useState<
+    'connected' | 'connecting' | 'error'
+  >('connecting')
   const [unknownSends, setUnknownSends] = useState<Set<string>>(() => new Set())
   const mutationLock = useRef(false)
   const epoch = useRef(0)
   const selection = useRef(0)
+  const messagesRef = useRef(messages)
+  const syncContext = useRef({
+    selectedId,
+    tab,
+    loading,
+    messageLoading,
+    pending,
+  })
+  const resumeSync = useRef(() => {})
   const menuButton = useRef<HTMLButtonElement>(null)
   const drawerRef = useRef<HTMLElement>(null)
   const selected = conversations.find((c) => c.id === selectedId)
+  const userId = user?.id
 
   const clearSession = useCallback((text = '') => {
     epoch.current++
@@ -224,6 +246,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     setUser(null)
     setConversations([])
     setMessages({})
+    setHistoryStartReached({})
     setStaff([])
     setDrafts({})
     setSelectedId(null)
@@ -233,10 +256,14 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     setNotice(text)
     setLoading(false)
     setMessageLoading(false)
+    setSyncState('connecting')
   }, [])
   const handleError = useCallback(
     (reason: unknown) => {
-      if (errorStatus(reason) === 401) {
+      if (
+        errorStatus(reason) === 401 ||
+        (api.mode === 'live' && errorStatus(reason) === 403)
+      ) {
         clearSession(errorText(reason))
         void api.logout().catch(() => undefined)
       } else setError(errorText(reason))
@@ -253,30 +280,71 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     if (generation !== epoch.current) return
     if (
       results.some(
-        (r) => r.status === 'rejected' && errorStatus(r.reason) === 401
+        (r) =>
+          r.status === 'rejected' &&
+          (errorStatus(r.reason) === 401 ||
+            (api.mode === 'live' && errorStatus(r.reason) === 403))
       )
     ) {
-      handleError({ status: 401 })
+      const rejected = results.find(
+        (r) =>
+          r.status === 'rejected' &&
+          (errorStatus(r.reason) === 401 || errorStatus(r.reason) === 403)
+      )
+      if (rejected?.status === 'rejected') handleError(rejected.reason)
       return
     }
-    if (results[0].status === 'fulfilled') setConversations(results[0].value)
-    else handleError(results[0].reason)
+    if (results[0].status === 'fulfilled') {
+      const allowed = new Set(results[0].value.map((item) => item.id))
+      setConversations(results[0].value)
+      if (api.mode === 'live')
+        setMessages((previous) =>
+          Object.fromEntries(
+            Object.entries(previous).filter(([id]) => allowed.has(id))
+          )
+        )
+    } else handleError(results[0].reason)
     if (results[1].status === 'fulfilled') setStaff(results[1].value)
     else handleError(results[1].reason)
     setLoading(false)
   }, [api, handleError])
   const loadMessages = useCallback(
-    async (id: string) => {
+    async (id: string, before?: HistoryCursor) => {
       const generation = epoch.current
       const request = ++selection.current
       setMessageLoading(true)
       try {
-        const list = await api.listMessages(id)
-        if (generation === epoch.current && request === selection.current)
-          setMessages((previous) => ({ ...previous, [id]: list }))
+        const list = before
+          ? await api.listMessages(id, before)
+          : await api.listMessages(id)
+        if (generation === epoch.current && request === selection.current) {
+          setMessages((previous) => ({
+            ...previous,
+            [id]: before
+              ? [
+                  ...list.filter(
+                    (item) =>
+                      !(previous[id] ?? []).some((old) => old.id === item.id)
+                  ),
+                  ...(previous[id] ?? []),
+                ]
+              : list,
+          }))
+          setHistoryStartReached((previous) => ({
+            ...previous,
+            [id]: list.length === 0,
+          }))
+        }
       } catch (reason) {
-        if (generation === epoch.current && request === selection.current)
+        if (generation === epoch.current && request === selection.current) {
+          if (api.mode === 'live' && errorStatus(reason) === 404) {
+            setConversations((previous) =>
+              previous.filter((item) => item.id !== id)
+            )
+            setMessages((previous) => ({ ...previous, [id]: [] }))
+          }
           handleError(reason)
+        }
       } finally {
         if (generation === epoch.current && request === selection.current)
           setMessageLoading(false)
@@ -284,6 +352,179 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     },
     [api, handleError]
   )
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+  useEffect(() => {
+    syncContext.current = { selectedId, tab, loading, messageLoading, pending }
+    resumeSync.current()
+  }, [selectedId, tab, loading, messageLoading, pending])
+  useEffect(() => {
+    if (!userId || api.mode !== 'live' || !api.subscribe) return
+    let stopped = false
+    let working = false
+    let dirty = false
+    let channelConnected = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const generation = epoch.current
+    function schedule() {
+      // 只合併短時間內的通知，不定時查資料；沒有通知就沒有背景查詢。
+      if (!stopped && dirty && !working && !timer)
+        timer = setTimeout(() => {
+          timer = undefined
+          void update()
+        }, 200)
+    }
+    function changed() {
+      dirty = true
+      schedule()
+    }
+    resumeSync.current = schedule
+    async function update() {
+      const context = syncContext.current
+      if (
+        stopped ||
+        document.visibilityState === 'hidden' ||
+        context.loading ||
+        context.messageLoading ||
+        context.pending ||
+        mutationLock.current
+      )
+        return
+      working = true
+      dirty = false
+      const request = selection.current
+      const current = () =>
+        !stopped &&
+        generation === epoch.current &&
+        request === selection.current &&
+        !mutationLock.current
+      try {
+        const overview = await Promise.allSettled([
+          api.listConversations(),
+          api.listStaff(),
+          api.getSession?.(),
+        ])
+        if (!current()) {
+          dirty = true
+          return
+        }
+        const denied = overview.find(
+          (result) =>
+            result.status === 'rejected' &&
+            [401, 403].includes(errorStatus(result.reason))
+        )
+        if (denied?.status === 'rejected') throw denied.reason
+        if (overview[0].status === 'rejected') throw overview[0].reason
+        if (overview[1].status === 'rejected') throw overview[1].reason
+        if (overview[2].status === 'rejected') throw overview[2].reason
+        if (overview[2].value && overview[2].value.id !== userId)
+          throw new Error('員工身分已變更')
+        const allowed = new Set(overview[0].value.map((item) => item.id))
+        const id = context.selectedId
+        let incoming: Message[] = []
+        if (id && allowed.has(id) && context.tab === 'inbox') {
+          incoming = await api.listMessages(id)
+          const known = new Set(
+            (messagesRef.current[id] ?? []).map((item) => item.id)
+          )
+          let batch = incoming
+          // 補齊斷線期間超過一頁的訊息，保留先前已載入的較早歷史。
+          while (
+            current() &&
+            known.size &&
+            batch.length === 100 &&
+            !batch.some((item) => known.has(item.id))
+          ) {
+            const first = batch[0]
+            batch = await api.listMessages(id, {
+              id: first.id,
+              createdAt: first.createdAt,
+            })
+            if (batch.some((item) => item.id === first.id))
+              throw new Error('歷史分頁沒有前進')
+            incoming = [...batch, ...incoming]
+          }
+        }
+        if (!current()) {
+          dirty = true
+          return
+        }
+        setConversations(overview[0].value)
+        setStaff(overview[1].value)
+        if (overview[2].value) setUser(overview[2].value)
+        setMessages((previous) => {
+          const next = Object.fromEntries(
+            Object.entries(previous).filter(([key]) => allowed.has(key))
+          )
+          if (id && allowed.has(id) && context.tab === 'inbox') {
+            const combined = new Map(
+              (next[id] ?? []).map((item) => [item.id, item])
+            )
+            for (const item of incoming) combined.set(item.id, item)
+            next[id] = [...combined.values()].sort(
+              (a, b) =>
+                Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
+                a.id.localeCompare(b.id)
+            )
+          }
+          return next
+        })
+        if (id && !allowed.has(id)) {
+          setDrafts((previous) =>
+            Object.fromEntries(
+              Object.entries(previous).filter(([key]) => key !== id)
+            )
+          )
+          setSelectedId(null)
+          setChatOpen(false)
+        }
+        if (channelConnected) setSyncState('connected')
+      } catch (reason) {
+        if (!current()) {
+          dirty = true
+          return
+        }
+        if ([401, 403].includes(errorStatus(reason))) handleError(reason)
+        else if (errorStatus(reason) === 404 && context.selectedId) {
+          const id = context.selectedId
+          setMessages((previous) => ({ ...previous, [id]: [] }))
+          setDrafts((previous) =>
+            Object.fromEntries(
+              Object.entries(previous).filter(([key]) => key !== id)
+            )
+          )
+          setConversations((previous) =>
+            previous.filter((item) => item.id !== id)
+          )
+          setSelectedId(null)
+          setChatOpen(false)
+        } else setSyncState('error')
+      } finally {
+        working = false
+        schedule()
+      }
+    }
+    function resume() {
+      if (document.visibilityState !== 'hidden') changed()
+    }
+    const stopSubscription = api.subscribe(changed, (state) => {
+      channelConnected = state === 'connected'
+      setSyncState(state)
+    })
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+      resumeSync.current = () => {}
+      stopSubscription()
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', resume)
+    }
+  }, [api, userId, handleError])
   useEffect(() => {
     if (!drawer) return
     const container = drawerRef.current
@@ -319,14 +560,20 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     if (selectedId) await loadMessages(selectedId)
   }
   async function mutate(action: 'send' | 'ai' | 'human') {
-    if (mutationLock.current || !selected || !user) return
+    if (
+      (api.mode === 'live' && !user?.canReply) ||
+      mutationLock.current ||
+      !selected ||
+      !user
+    )
+      return
     const conversation = selected
     const body = (drafts[conversation.id] ?? '').trim()
     if (
       unknownSends.has(conversation.id) ||
       (messages[conversation.id] ?? []).some(
         (message) =>
-          message.authorType === 'agent' &&
+          message.authorType !== 'customer' &&
           ['unknown', 'sending', 'queued'].includes(message.status)
       )
     )
@@ -336,6 +583,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
       return
     }
     const generation = epoch.current
+    selection.current++
     mutationLock.current = true
     setPending(true)
     setError('')
@@ -533,7 +781,11 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               }
             >
               <span />
-              {api.mode === 'demo' ? '示範模式 · 不連接 LINE' : '真實 API 模式'}
+              {api.mode === 'demo'
+                ? '示範模式 · 不連接 LINE'
+                : user?.canReply
+                  ? '正式紀錄 · 客服操作'
+                  : '正式紀錄 · 唯讀'}
             </span>
             <button
               className='icon-button'
@@ -566,6 +818,15 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
           {tab === 'inbox' ? (
             <>
               <ConversationList
+                syncStatus={
+                  api.mode === 'live'
+                    ? syncState === 'connected'
+                      ? '新訊息即時更新中'
+                      : syncState === 'error'
+                        ? '即時連線中斷，恢復連線後自動補讀'
+                        : '正在連接即時更新…'
+                    : undefined
+                }
                 conversations={conversations}
                 selectedId={selectedId}
                 query={query}
@@ -587,12 +848,28 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                 currentStaff={user}
                 loading={messageLoading}
                 pending={pending}
+                canLoadEarlier={
+                  !!selectedId &&
+                  !!messages[selectedId]?.length &&
+                  !historyStartReached[selectedId]
+                }
+                onLoadEarlier={() => {
+                  const first = selectedId
+                    ? messages[selectedId]?.[0]
+                    : undefined
+                  if (selectedId && first && !messageLoading)
+                    void loadMessages(selectedId, {
+                      createdAt: first.createdAt,
+                      id: first.id,
+                    })
+                }}
+                readOnly={api.mode === 'live' && !user?.canReply}
                 sendBlocked={
                   selectedId
                     ? unknownSends.has(selectedId) ||
                       (messages[selectedId] ?? []).some(
                         (message) =>
-                          message.authorType === 'agent' &&
+                          message.authorType !== 'customer' &&
                           ['unknown', 'sending', 'queued'].includes(
                             message.status
                           )
