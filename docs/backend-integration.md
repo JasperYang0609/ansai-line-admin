@@ -73,3 +73,21 @@ POST /conversations/:id/messages，body = { body: string, expectedVersion: integ
 同一波通知會合併讀取，正在操作時稍後補讀。新資料依識別碼合併，保留草稿、較早歷史、閱讀位置及未知發送結果鎖定。首次連線、重連與切回頁面時補讀一次，斷線期間跨頁的新訊息應補齊。通知不執行人工發送、接手或交回 AI。
 
 官方即時連線套件固定版本，連線心跳僅確認通訊仍存在，不是固定查詢對話。通知通道不承擔客服歷史保存；短期系統通知與永久正文分開。正式啟用仍須核准 migration、管理函式及前端部署，並驗證真實接收通知，不以模擬測試冒充已上線。
+
+## 客戶內部記事與標籤（2026-11-08 新增契約）
+
+此功能需另外核對後端版本，不能從既有對話或訊息端點可用推論已支援。公開前端已提供 live adapter 與隔離的記憶體 demo；本節不是正式部署或跨登入保存已驗收的證據。
+
+- `GET /conversations/:conversationId/customer` → CustomerDetails。
+- `POST /conversations/:conversationId/customer`，JSON body 僅含 `{ note, tags, expectedVersion }` → CustomerDetails。
+- CustomerDetails = `{ note: string, tags: string[], version: integer, updatedAt: ISO8601 | null, updatedBy: { id: string, name: string } | null, canEdit: boolean }`。version 為獨立客戶資料版本，不能使用對話接待模式的版本。新客戶尚未有資料時，由已授權的後端回傳空記事／標籤、version 0、null 更新欄位及權威 canEdit；前端不能因 404 假造空資料。
+- 記事最多 5000 Unicode codepoints，可清空。標籤最多 10 個，每個去除前後空白後為 1～30 codepoints，完全相同字串去重；大小寫不同不擅自視為相同。不可靜默截字。後端亦須獨立驗證長度、型別與 HTTP 大小，不能信任前端檢查。
+- 沿用現有 bearer／API base。服務端由有權查看的 conversation 推導相同 tenant/channel/customer，不接受前端提供 tenant、contact、作者或 canEdit；讀寫均重新驗證 active membership 及物件範圍。canEdit 只是顯示提示，不代替每次 POST 授權。
+- 後端以 expectedVersion 原子比較更新，同交易保存記事、標籤、版本、更新人與時間；跨登入保存須由正式後端實現。GET /conversations 的 tags 應來自同份客戶資料，供收件匣搜尋；成功後前端更新當前列並重讀列表。
+- 409：保留草稿且鎖定再次儲存。使用者明確選擇「重新載入客戶資料」並確認捨棄草稿後，才讀取最新版本；不偷偷覆寫或自動重送。網路／5xx／格式不符也不宣稱儲存成功，需明確重新載入確認。
+- 404／405／501：提示需要更新後端或核對端點／物件可見性，不退 demo、不假保存。403：權限不足、停止編輯；503：服務不可用、fail closed。401：沿用登出清除 session。客戶 403 不推論所有工作台權限都失效；其他全域授權撤銷仍沿用既有 session 流程。
+- UI 離開對話、切換模組、手動登出與窄版返回前會確認未存草稿；儲存中暫停離開，重整／關閉頁面使用瀏覽器原生離開提示。安全性撤銷／登入過期仍必須清除畫面，不為保留草稿繞過授權。切換、卸載與登出後的舊回應不能填回另一客戶。草稿不寫 browser storage。
+
+AI 預設讀取同份、相同 tenant/channel/customer 的記事與標籤作為回覆參考，不使用另一份共享 RAG 或 embedding 索引。記事與標籤是**不可信資料**，不是模型系統指令或工具授權；後端必須以低信任上下文包裝，不能將其中指令提升權限、跨客戶查詢或原文直接傳給顧客。前端的儲存操作不傳 LINE 訊息、不同步 LINE OA 原生記事／標籤，也不呼叫模型。AI 實際讀取與防注入必須由後端另行驗收，前端提示不代表模型已接線。
+
+Demo 資料只在該 adapter 實例記憶體內，重新整理頁面重設；同實例的登出登入不是正式持久化證據。正式部署前，另驗同租戶雙員工衝突、跨租戶／通道／客戶拒絕、權限撤銷、儲存失敗、AI 上下文來源與跨登入讀回；不得用本機 mock 測試代替。

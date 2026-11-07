@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { RealtimeClient } from '@supabase/realtime-js'
+import { customerSchema, customerUpdateSchema } from './customer'
 import type {
   Conversation,
+  CustomerDetails,
   HelpdeskApi,
   Message,
   Session,
@@ -209,6 +211,19 @@ export function createDemoApi(): HelpdeskApi {
       status: 'sent',
     },
   ]
+  const customers = new Map<string, CustomerDetails>(
+    conversations.map((c) => [
+      c.id,
+      {
+        note: '',
+        tags: [...c.tags],
+        version: 0,
+        updatedAt: null,
+        updatedBy: null,
+        canEdit: true,
+      },
+    ])
+  )
   let user: Staff | null = null
   const sent = new Map<
     string,
@@ -226,6 +241,29 @@ export function createDemoApi(): HelpdeskApi {
   }
   return {
     mode: 'demo',
+    async getCustomer(id) {
+      find(id)
+      return structuredClone(customers.get(id)!)
+    },
+    async updateCustomer(id, input) {
+      const conversation = find(id)
+      const update = customerUpdateSchema.safeParse(input)
+      if (!update.success) throw new ApiError(400, '客戶資料格式不正確。')
+      const old = customers.get(id)!
+      if (old.version !== update.data.expectedVersion)
+        throw new ApiError(409, '客戶資料已更新。')
+      const who = signedIn()
+      const next: CustomerDetails = {
+        ...update.data,
+        version: old.version + 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: { id: who.id, name: who.name },
+        canEdit: true,
+      }
+      customers.set(id, next)
+      conversation.tags = [...next.tags]
+      return structuredClone(next)
+    },
     async login(email) {
       user = people.find((p) => p.email === email.trim()) ?? people[0]
       return {
@@ -424,6 +462,23 @@ export function createLiveApi(
   }
   return {
     mode: 'live',
+    async getCustomer(id) {
+      return parse(
+        customerSchema,
+        await call('/conversations/' + segment(id) + '/customer')
+      )
+    },
+    async updateCustomer(id, input) {
+      const update = customerUpdateSchema.safeParse(input)
+      if (!update.success) throw new ApiError(400, '客戶資料格式不正確。')
+      return parse(
+        customerSchema,
+        await call('/conversations/' + segment(id) + '/customer', {
+          method: 'POST',
+          body: JSON.stringify(update.data),
+        })
+      )
+    },
     async getSession() {
       return parse(staffSchema, await call('/session'))
     },
