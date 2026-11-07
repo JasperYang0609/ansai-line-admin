@@ -8,6 +8,16 @@
 
 ## 課堂安裝前提
 
+### 預設版本與已驗收能力（2026-11-08）
+
+本次同步 main 的前端功能基準為 `95f38c458694c7777848b6ced03bbc18945265a1`，包含員工登入、授權對話與永久歷史分頁、受控接手／真人發送／交回 AI，以及私人事件通知自動更新。從下方官方 main 安裝即可取得，不需改抓舊 release 或功能分支。文件整理後的實際安裝 commit 與 CI 必須另記；不能把功能基準 hash 當成最新 main 的固定 hash。
+
+這些能力已在維護者原有環境受控驗收，詳見[發布紀錄](docs/releases/2026-11-08.md)。新學員的環境仍要逐項接線及驗證，不能推論所有新安裝都已能發送 LINE。
+
+除既有 session／staff／conversations／messages 外，需核對管理函式的 `GET /events`：由服務端核准員工並回傳本人私人通知頻道，瀏覽器以既有員工登入憑證訂閱 Supabase 廣播。資料保存、發送狀態及分派改變後提醒更新；沒有固定五秒查詢。不能把私人正文表直接開放給客戶端複寫，也不新增 Cloudflare Worker。若員工或通知接線尚未完成，明確列為待辦，不改用公開頻道或放寬 RLS。
+
+通知、接手與人工發送都是各自授權的服務端能力；不因安裝 UI 就自動開啟。LINE OA 原生後台人工回覆及原先沒有保存的舊 AI 正文，不會自動回填。正文長期保存，收件人保存政策另外核准，不能綁成三十天期限。
+
 老師會依序帶學員完成各自的 Supabase、Cloudflare、Webhook 與 Embedding；本入口是在該環境上安裝客服後台，不是強制先做展示版。沿用學員本人確認的專案、公開連線參數與課堂提供的設定，不重建服務、不切換帳號、不更改既有 Webhook 或 Embedding 模型／索引。缺少必要設定就列出缺項並停止，不退回假資料宣稱成功。
 
 Webhook／Embedding 完成不自動代表客服管理 API 已具備；仍需核對 [後端契約](docs/backend-integration.md) 的登入、員工資格與對話端點，或課堂已提供的相容 adapter。這是相容性檢查，不是要求重做既有系統。
@@ -108,7 +118,9 @@ pnpm dev --host 127.0.0.1
 - 也可在已驗證的本機／CI 建置後，以 Pages Direct Upload 交付同一份 `dist`；這條路不會在 Cloudflare 重新建置，不把整個 repo／環境檔上傳。先確認專案使用 Git integration 還是 Direct Upload，不自行切換既有部署方式。
 - 目前沒有頂層 `404.html`，可沿用 Pages 的預設 SPA fallback；若未來新增前端路由，驗證直接輸入 URL 與重新整理，不隨意把 API 錯誤 rewrite 成成功頁。
 
-部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證目標環境登入、對話載入、三主題與窄版；發送僅限已確認的測試收件人。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。本文件尚未在特定 Cloudflare 帳號實際部署驗證。
+部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證目標環境登入、對話載入、三主題與窄版；發送僅限已確認的測試收件人。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。維護者既有 Pages 的受控驗收見發布紀錄；新帳號、不同瀏覽器及學員環境仍須各自驗證。
+
+合併前也要唯讀核對 GitHub workflows、repository Webhooks 與 Pages 的 Git integration。維護者目前採手動上傳，main 合併只跑測試，不重新部署；新學員不可照抄此結論，若自己的 main 已接自動部署，先回報並停止合併，不自行關閉設定。
 
 Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權、建立資料庫或補上真人發送。正式接線時另依後端契約設定實際部署 origin 的 CORS allowlist、環境與成本，所有 `VITE_` 仍是公開資料，不放 LINE token／service-role／加密金鑰。
 

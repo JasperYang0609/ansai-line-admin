@@ -1,6 +1,6 @@
-# 後端接線契約（尚待實作／部署）
+# 後端接線契約與環境驗證
 
-本文件是公開 DTO 契約，不是目前既有後端已具備的端點。API adapter 不會直接讀資料庫、不會發送 LINE，也不提供假的 live 成功。
+本文件是公開 DTO 契約。維護者既有後端已完成相容接線與受控驗收，見[發布紀錄](releases/2026-11-08.md)；這不代表學員自己的後端已存在同樣端點。API adapter 不直接讀私人正文表，LINE 發送仍由已授權的管理服務決定，不能提供假的 live 成功。
 
 ## 部署分工
 
@@ -27,6 +27,7 @@ GET /session → Staff（server membership 驗證通過才回覆）。
 GET /conversations → Conversation[]，v1 先限定最多 100 筆、有權查看的最近對話；不可用無限量 status dump。前端不代表已載入所有歷史。
 GET /conversations/:id/messages → Message[]，每頁最多 100 則，依建立時間與 id 穩定排序；只有此對話授權通過後才解密。可帶 beforeAt 與 beforeId 查詢更早一頁，兩者必須一起提供。beforeAt 保留原時間精度，beforeId 使用該頁最早訊息的識別碼。分頁不設日期期限，不能把超過三十天或較舊的已保存正文隱藏。歷史缺口不能捏造或以 AI 記憶冒充完整紀錄。
 GET /staff → Staff[]，只提供本 tenant 有權查看的客服資訊；不可跨租戶列全站帳號。
+GET /events → { topic: string }，須驗證員工及固定租戶／通道，回傳本人專用的私人即時通知頻道；細節見下方事件通知段落。
 POST /conversations/:id/mode，body = { mode: ai | human, expectedVersion: integer } → Conversation。
 POST /conversations/:id/messages，body = { body: string, expectedVersion: integer, requestId: UUIDv4 } → Message（可以是 queued，之後讀取歷史確認最終狀態）。
 
@@ -53,9 +54,9 @@ POST /conversations/:id/messages，body = { body: string, expectedVersion: integ
 
 ## 仍需另外取得的正式權限
 
-現有服務的 migration、員工權限硬化、長期收件人／AI／真人正文保存、人工 push 成本與 retention、正式雲端 origin／登入帳號及測試收件人，必須先確認範圍。這個教學版沒有取得、部署或自動啟用它們。
+新環境的 migration、員工權限、長期正文與收件人政策、人工 push 成本、正式雲端 origin／登入帳號、通知啟用及測試收件人，必須逐項確認範圍。公開前端安裝不會替學員取得、部署或自動啟用它們。
 
-在這些後端缺口補齊前，本 repo 的課堂示範可驗證 UI，但整案 live 功能為 BLOCKED；不是已接好 LINE 的正式客服。現有 OA Manager 人工訊息／被清掉的舊 AI 正文都不會因此自動還原。
+若學員自己的後端缺項尚未補齊，只能宣稱相應 UI 測試通過，受影響的 live 能力仍待接線。現有 OA Manager 人工訊息／被清掉的舊 AI 正文不會因此自動還原。
 
 ## 正文與收件人分開保存
 
