@@ -236,7 +236,10 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
   }, [])
   const handleError = useCallback(
     (reason: unknown) => {
-      if (errorStatus(reason) === 401) {
+      if (
+        errorStatus(reason) === 401 ||
+        (api.mode === 'live' && errorStatus(reason) === 403)
+      ) {
         clearSession(errorText(reason))
         void api.logout().catch(() => undefined)
       } else setError(errorText(reason))
@@ -253,14 +256,30 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     if (generation !== epoch.current) return
     if (
       results.some(
-        (r) => r.status === 'rejected' && errorStatus(r.reason) === 401
+        (r) =>
+          r.status === 'rejected' &&
+          (errorStatus(r.reason) === 401 ||
+            (api.mode === 'live' && errorStatus(r.reason) === 403))
       )
     ) {
-      handleError({ status: 401 })
+      const rejected = results.find(
+        (r) =>
+          r.status === 'rejected' &&
+          (errorStatus(r.reason) === 401 || errorStatus(r.reason) === 403)
+      )
+      if (rejected?.status === 'rejected') handleError(rejected.reason)
       return
     }
-    if (results[0].status === 'fulfilled') setConversations(results[0].value)
-    else handleError(results[0].reason)
+    if (results[0].status === 'fulfilled') {
+      const allowed = new Set(results[0].value.map((item) => item.id))
+      setConversations(results[0].value)
+      if (api.mode === 'live')
+        setMessages((previous) =>
+          Object.fromEntries(
+            Object.entries(previous).filter(([id]) => allowed.has(id))
+          )
+        )
+    } else handleError(results[0].reason)
     if (results[1].status === 'fulfilled') setStaff(results[1].value)
     else handleError(results[1].reason)
     setLoading(false)
@@ -275,8 +294,15 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
         if (generation === epoch.current && request === selection.current)
           setMessages((previous) => ({ ...previous, [id]: list }))
       } catch (reason) {
-        if (generation === epoch.current && request === selection.current)
+        if (generation === epoch.current && request === selection.current) {
+          if (api.mode === 'live' && errorStatus(reason) === 404) {
+            setConversations((previous) =>
+              previous.filter((item) => item.id !== id)
+            )
+            setMessages((previous) => ({ ...previous, [id]: [] }))
+          }
           handleError(reason)
+        }
       } finally {
         if (generation === epoch.current && request === selection.current)
           setMessageLoading(false)
@@ -319,14 +345,20 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     if (selectedId) await loadMessages(selectedId)
   }
   async function mutate(action: 'send' | 'ai' | 'human') {
-    if (mutationLock.current || !selected || !user) return
+    if (
+      (api.mode === 'live' && !user?.canReply) ||
+      mutationLock.current ||
+      !selected ||
+      !user
+    )
+      return
     const conversation = selected
     const body = (drafts[conversation.id] ?? '').trim()
     if (
       unknownSends.has(conversation.id) ||
       (messages[conversation.id] ?? []).some(
         (message) =>
-          message.authorType === 'agent' &&
+          message.authorType !== 'customer' &&
           ['unknown', 'sending', 'queued'].includes(message.status)
       )
     )
@@ -533,7 +565,11 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               }
             >
               <span />
-              {api.mode === 'demo' ? '示範模式 · 不連接 LINE' : '真實 API 模式'}
+              {api.mode === 'demo'
+                ? '示範模式 · 不連接 LINE'
+                : user?.canReply
+                  ? '正式紀錄 · 客服操作'
+                  : '正式紀錄 · 唯讀'}
             </span>
             <button
               className='icon-button'
@@ -587,12 +623,13 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                 currentStaff={user}
                 loading={messageLoading}
                 pending={pending}
+                readOnly={api.mode === 'live' && !user?.canReply}
                 sendBlocked={
                   selectedId
                     ? unknownSends.has(selectedId) ||
                       (messages[selectedId] ?? []).some(
                         (message) =>
-                          message.authorType === 'agent' &&
+                          message.authorType !== 'customer' &&
                           ['unknown', 'sending', 'queued'].includes(
                             message.status
                           )

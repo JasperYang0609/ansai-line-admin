@@ -62,7 +62,7 @@ it('A 的晚到登入不能覆寫 B 的登入', async () => {
   expect((await api.listStaff())[0].id).toBe('b')
   expect(fetcher.mock.calls[3][1].headers.Authorization).toBe('Bearer token-b')
 })
-it('發送回傳無效或過大都視為結果不明，不重試', async () => {
+it('查閱回傳無效或過大時拒絕結果，不重試', async () => {
   for (const response of [
     Response.json({ wrong: true }),
     new Response('x'.repeat(1_048_577)),
@@ -79,9 +79,29 @@ it('發送回傳無效或過大都視為結果不明，不重試', async () => {
       'sb_publishable_fake'
     )
     await api.login('b@example.test', 'fake')
-    await expect(
-      api.sendMessage('c', '測試', 0, crypto.randomUUID())
-    ).rejects.toMatchObject({ status: 502 })
+    await expect(api.listMessages('c')).rejects.toMatchObject({ status: 502 })
     expect(fetcher).toHaveBeenCalledTimes(3)
   }
+})
+
+it('切換客服帳號後，上一位帳號晚到的歷史不能交給新登入', async () => {
+  const old = deferred()
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ access_token: 'token-a' }))
+    .mockResolvedValueOnce(Response.json({ ...staff, id: 'a' }))
+    .mockReturnValueOnce(old.promise)
+    .mockResolvedValueOnce(Response.json({ access_token: 'token-b' }))
+    .mockResolvedValueOnce(Response.json(staff))
+  vi.stubGlobal('fetch', fetcher)
+  const api = createLiveApi(
+    'https://admin.example.test',
+    'https://project.supabase.co',
+    'sb_publishable_fake'
+  )
+  await api.login('a@example.test', 'fake')
+  const pending = api.listMessages('conversation-a').catch((error) => error)
+  await api.login('b@example.test', 'fake')
+  old.resolve(Response.json([{ body: '舊帳號的客戶資料' }]))
+  expect((await pending).status).toBe(409)
 })

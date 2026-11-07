@@ -137,29 +137,64 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
       'Bearer test-user-token'
     )
   })
-  it('只傳正文、版本與 requestId，不由瀏覽器指定租戶或作者', async () => {
-    const returned = {
+  it('正式模式使用伺服器接手與發送端點，不傳作者或租戶', async () => {
+    const conversation = {
+      id: 'c',
+      customerName: '合成顧客',
+      preview: '',
+      updatedAt: new Date().toISOString(),
+      mode: 'human',
+      version: 4,
+      assignedTo: who.id,
+      unread: 0,
+      tags: [],
+    }
+    const message = {
       id: 'm',
       conversationId: 'c',
       body: '測試',
-      createdAt: '2026-01-01',
+      createdAt: new Date().toISOString(),
       authorType: 'agent',
       authorName: who.name,
-      status: 'queued',
+      status: 'sent',
     }
-    const { api, fetcher } = fixture([Response.json(returned)])
+    const { api, fetcher } = fixture([
+      Response.json(conversation),
+      Response.json(message),
+      Response.json({ ...conversation, mode: 'ai', version: 5 }),
+    ])
     await api.login('agent@example.test', 'fake-password')
+    await api.setMode('c', 'human', 3)
     const requestId = id()
-    expect((await api.sendMessage('c', '測試', 3, requestId)).status).toBe(
-      'queued'
+    await api.sendMessage('c', ' 測試 ', 4, requestId)
+    await api.setMode('c', 'ai', 4)
+    expect(fetcher.mock.calls[2][0]).toBe(
+      'https://admin.example.test/conversations/c/mode'
     )
+    expect(fetcher.mock.calls[2][1].method).toBe('POST')
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({
-      body: '測試',
+      mode: 'human',
       expectedVersion: 3,
+    })
+    expect(JSON.parse(fetcher.mock.calls[3][1].body)).toEqual({
+      body: '測試',
+      expectedVersion: 4,
       requestId,
     })
-    expect(fetcher.mock.calls[2][1].redirect).toBe('error')
-    expect(fetcher.mock.calls[2][1].credentials).toBe('omit')
+    expect(fetcher).toHaveBeenCalledTimes(5)
+  })
+  it('人工發送的逾時、5xx 與格式錯誤都只發出一次請求', async () => {
+    for (const response of [
+      new Response('', { status: 503 }),
+      Response.json({ wrong: true }),
+    ]) {
+      const { api, fetcher } = fixture([response])
+      await api.login('agent@example.test', 'fake-password')
+      await expect(
+        api.sendMessage('c', '人工回覆', 1, id())
+      ).rejects.toMatchObject({ status: expect.any(Number) })
+      expect(fetcher).toHaveBeenCalledTimes(3)
+    }
   })
   it('401 清除 session，之後不能繼續呼叫', async () => {
     const { api, fetcher } = fixture([new Response('', { status: 401 })])
@@ -171,7 +206,7 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
   it('409 不重試，不變成示範成功', async () => {
     const { api, fetcher } = fixture([new Response('', { status: 409 })])
     await api.login('agent@example.test', 'fake-password')
-    await expect(api.sendMessage('c', '一次', 0, id())).rejects.toMatchObject({
+    await expect(api.listMessages('c')).rejects.toMatchObject({
       status: 409,
     })
     expect(fetcher).toHaveBeenCalledTimes(3)

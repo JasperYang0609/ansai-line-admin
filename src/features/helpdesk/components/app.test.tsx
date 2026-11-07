@@ -221,3 +221,81 @@ describe('客服工作台流程', () => {
       .toHaveFocus()
   })
 })
+
+it('正式查閱顯示歷史範圍並隱藏接手、恢復和發送', async () => {
+  const demo = createDemoApi()
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        mode: 'live',
+        login: () => demo.login('teacher@example.test', ''),
+      }}
+    />
+  )
+  await page
+    .getByRole('textbox', { name: '電子郵件' })
+    .fill('agent@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('fixture-only')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await expect
+    .element(page.getByRole('note'))
+    .toHaveTextContent('部分訊息、AI 回覆與真人回覆可能未保存')
+  await expect
+    .element(page.getByRole('button', { name: '接手對話' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('button', { name: '交回 AI' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('button', { name: '送出訊息' }))
+    .not.toBeInTheDocument()
+})
+
+it('取得伺服器操作資格的正式員工能接手、輸入回覆及交回 AI', async () => {
+  const demo = createDemoApi()
+  const login = async () => {
+    const result = await demo.login('teacher@example.test', '')
+    return { ...result, staff: { ...result.staff, canReply: true } }
+  }
+  const send = vi.spyOn(demo, 'sendMessage')
+  await render(<HelpdeskApp api={{ ...demo, mode: 'live', login }} />)
+  await page
+    .getByRole('textbox', { name: '電子郵件' })
+    .fill('agent@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('fixture-only')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await page.getByRole('button', { name: '接手對話' }).click()
+  await page.getByRole('textbox', { name: '回覆訊息' }).fill('這是人工回覆')
+  await page.getByRole('button', { name: '送出訊息' }).click()
+  await expect
+    .element(page.getByRole('log').getByText('這是人工回覆', { exact: true }))
+    .toBeInTheDocument()
+  expect(send).toHaveBeenCalledTimes(1)
+  await page.getByRole('button', { name: '交回 AI' }).click()
+  await expect
+    .element(page.getByRole('button', { name: '接手對話' }))
+    .toBeInTheDocument()
+})
+
+it('等待客服的未分派對話可直接接手，不必先交回 AI', async () => {
+  const demo = createDemoApi()
+  const change = vi.spyOn(demo, 'setMode')
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        listConversations: async () =>
+          (await demo.listConversations()).map((c) =>
+            c.id === 'demo-2' ? { ...c, assignedTo: null } : c
+          ),
+      }}
+    />
+  )
+  await page.getByRole('button', { name: '進入示範工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：陳同學/ }).click()
+  await page.getByRole('button', { name: '接手對話' }).click()
+  expect(change).toHaveBeenCalledWith('demo-2', 'human', 1)
+})

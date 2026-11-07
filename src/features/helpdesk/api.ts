@@ -12,6 +12,7 @@ const staffSchema = z.object({
   name: z.string(),
   email: z.string(),
   role: z.enum(['admin', 'agent']),
+  canReply: z.boolean().optional(),
 })
 const conversationSchema = z.object({
   id: z.string().min(1),
@@ -95,7 +96,7 @@ function publicKey(key: string) {
       ) as { role?: string }
       if (payload.role === 'anon') return key
     } catch {
-      /* not a public legacy JWT */
+      /* 無法解讀的舊式憑證不視為公開金鑰。 */
     }
   }
   throw new Error('僅能使用 Supabase publishable／anon key，不可放入管理金鑰。')
@@ -382,18 +383,21 @@ export function createLiveApi(
       throw new ApiError(502, '後端回傳格式不正確或過大，請核對操作結果。')
     }
   }
-  async function call(path: string, data?: unknown): Promise<unknown> {
+  async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     if (!token) throw new ApiError(401, '請先登入。')
     const generation = sessionGeneration
-    return request(
+    const result = await request(
       base + path,
       {
-        method: data === undefined ? 'GET' : 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: data === undefined ? undefined : JSON.stringify(data),
+        ...init,
+        method: init.method ?? 'GET',
+        headers: { apikey: key, Authorization: 'Bearer ' + token },
       },
       generation
     )
+    if (generation !== sessionGeneration)
+      throw new ApiError(409, '登入狀態已變更。')
+    return result
   }
   const segment = (id: string) => {
     if (
@@ -465,26 +469,31 @@ export function createLiveApi(
     async listStaff() {
       return parse(z.array(staffSchema).max(100), await call('/staff'))
     },
-    async sendMessage(id, body, expectedVersion, requestId) {
+    async sendMessage(id, body, version, requestId) {
       const text = requiredBody(body)
-      validVersion(expectedVersion)
+      validVersion(version)
       validRequestId(requestId)
       return parse(
         messageSchema,
         await call('/conversations/' + segment(id) + '/messages', {
-          body: text,
-          expectedVersion,
-          requestId,
+          method: 'POST',
+          body: JSON.stringify({
+            body: text,
+            expectedVersion: version,
+            requestId,
+          }),
         })
       )
     },
-    async setMode(id, mode, expectedVersion) {
-      validVersion(expectedVersion)
+    async setMode(id, mode, version) {
+      validVersion(version)
+      if (!['ai', 'human'].includes(mode))
+        throw new ApiError(400, '接待模式無效。')
       return parse(
         conversationSchema,
         await call('/conversations/' + segment(id) + '/mode', {
-          mode,
-          expectedVersion,
+          method: 'POST',
+          body: JSON.stringify({ mode, expectedVersion: version }),
         })
       )
     },

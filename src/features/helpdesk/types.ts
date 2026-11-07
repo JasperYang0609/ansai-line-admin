@@ -3,6 +3,7 @@ export type Staff = {
   name: string
   email: string
   role: 'admin' | 'agent'
+  canReply?: boolean
 }
 export type Session = { accessToken: string; staff: Staff }
 export type Message = {
