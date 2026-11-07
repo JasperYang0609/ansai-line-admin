@@ -241,7 +241,7 @@ it('正式查閱顯示歷史範圍並隱藏接手、恢復和發送', async () =
   await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
   await expect
     .element(page.getByRole('note'))
-    .toHaveTextContent('部分訊息、AI 回覆與真人回覆可能未保存')
+    .toHaveTextContent('部分舊訊息、AI 回覆與真人回覆可能未保存')
   await expect
     .element(page.getByRole('button', { name: '接手對話' }))
     .not.toBeInTheDocument()
@@ -298,4 +298,72 @@ it('等待客服的未分派對話可直接接手，不必先交回 AI', async (
   await page.getByRole('button', { name: /示範顧客：陳同學/ }).click()
   await page.getByRole('button', { name: '接手對話' }).click()
   expect(change).toHaveBeenCalledWith('demo-2', 'human', 1)
+})
+
+it('唯讀客服能載入超過三十天的 AI 與真人原文，讀到起點後保留已載入紀錄', async () => {
+  const demo = createDemoApi()
+  const recent = {
+    id: 'recent',
+    conversationId: 'demo-1',
+    body: '近期合成提問',
+    createdAt: '2026-11-01T00:00:00Z',
+    authorType: 'customer' as const,
+    authorName: '合成顧客',
+    status: 'received' as const,
+  }
+  const old = [
+    {
+      ...recent,
+      id: 'old-ai',
+      body: '六年前保存的 AI 原文',
+      createdAt: '2020-01-01T00:00:00Z',
+      authorType: 'ai' as const,
+      status: 'sent' as const,
+    },
+    {
+      ...recent,
+      id: 'old-agent',
+      body: '六年前保存的真人原文',
+      createdAt: '2020-01-02T00:00:00Z',
+      authorType: 'agent' as const,
+      status: 'sent' as const,
+    },
+  ]
+  const history = vi
+    .fn()
+    .mockResolvedValueOnce([recent])
+    .mockResolvedValueOnce(old)
+    .mockResolvedValueOnce([])
+  await render(
+    <HelpdeskApp
+      api={{
+        ...demo,
+        mode: 'live',
+        login: () => demo.login('teacher@example.test', ''),
+        listMessages: history,
+      }}
+    />
+  )
+  await page.getByRole('textbox', { name: '電子郵件' }).fill('a@example.test')
+  await page.getByLabelText('密碼', { exact: true }).fill('合成密碼')
+  await page.getByRole('button', { name: '登入工作台' }).click()
+  await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+  await page.getByRole('button', { name: '載入較早訊息' }).click()
+  expect(history).toHaveBeenLastCalledWith('demo-1', {
+    id: recent.id,
+    createdAt: recent.createdAt,
+  })
+  await expect
+    .element(page.getByRole('log').getByText(old[0].body, { exact: true }))
+    .toBeVisible()
+  await expect
+    .element(page.getByRole('log').getByText(old[1].body, { exact: true }))
+    .toBeVisible()
+  await page.getByRole('button', { name: '載入較早訊息' }).click()
+  await expect
+    .element(page.getByRole('button', { name: '載入較早訊息' }))
+    .not.toBeInTheDocument()
+  await expect
+    .element(page.getByRole('log').getByText(old[0].body, { exact: true }))
+    .toBeInTheDocument()
 })

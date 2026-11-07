@@ -239,9 +239,17 @@ export function createDemoApi(): HelpdeskApi {
       signedIn()
       return structuredClone(conversations)
     },
-    async listMessages(id) {
+    async listMessages(id, before) {
       find(id)
-      return structuredClone(messages.filter((m) => m.conversationId === id))
+      return structuredClone(
+        messages.filter(
+          (m) =>
+            m.conversationId === id &&
+            (!before ||
+              m.createdAt < before.createdAt ||
+              (m.createdAt === before.createdAt && m.id < before.id))
+        )
+      )
     },
     async listStaff() {
       signedIn()
@@ -460,10 +468,22 @@ export function createLiveApi(
         await call('/conversations')
       )
     },
-    async listMessages(id) {
+    async listMessages(id, before) {
+      if (
+        before &&
+        (!Number.isFinite(Date.parse(before.createdAt)) || !before.id)
+      )
+        throw new ApiError(400, '歷史分頁位置無效。')
+      const query = before
+        ? '?' +
+          new URLSearchParams({
+            beforeAt: before.createdAt,
+            beforeId: segment(before.id),
+          })
+        : ''
       return parse(
         z.array(messageSchema).max(100),
-        await call('/conversations/' + segment(id) + '/messages')
+        await call('/conversations/' + segment(id) + '/messages' + query)
       )
     },
     async listStaff() {

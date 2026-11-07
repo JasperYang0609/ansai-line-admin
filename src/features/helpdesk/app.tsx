@@ -20,7 +20,13 @@ import {
 } from './components/modules'
 import { ThemeSelector } from './theme'
 import { useHelpdeskTheme, type HelpdeskTheme } from './theme-preference'
-import type { Conversation, HelpdeskApi, Message, Staff } from './types'
+import type {
+  Conversation,
+  HelpdeskApi,
+  HistoryCursor,
+  Message,
+  Staff,
+} from './types'
 
 type Tab = 'inbox' | 'staff' | 'reports' | 'settings' | 'learning'
 const navigation = [
@@ -209,6 +215,9 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [messageLoading, setMessageLoading] = useState(false)
+  const [historyStartReached, setHistoryStartReached] = useState<
+    Record<string, boolean>
+  >({})
   const [pending, setPending] = useState(false)
   const [unknownSends, setUnknownSends] = useState<Set<string>>(() => new Set())
   const mutationLock = useRef(false)
@@ -224,6 +233,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     setUser(null)
     setConversations([])
     setMessages({})
+    setHistoryStartReached({})
     setStaff([])
     setDrafts({})
     setSelectedId(null)
@@ -285,14 +295,32 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     setLoading(false)
   }, [api, handleError])
   const loadMessages = useCallback(
-    async (id: string) => {
+    async (id: string, before?: HistoryCursor) => {
       const generation = epoch.current
       const request = ++selection.current
       setMessageLoading(true)
       try {
-        const list = await api.listMessages(id)
-        if (generation === epoch.current && request === selection.current)
-          setMessages((previous) => ({ ...previous, [id]: list }))
+        const list = before
+          ? await api.listMessages(id, before)
+          : await api.listMessages(id)
+        if (generation === epoch.current && request === selection.current) {
+          setMessages((previous) => ({
+            ...previous,
+            [id]: before
+              ? [
+                  ...list.filter(
+                    (item) =>
+                      !(previous[id] ?? []).some((old) => old.id === item.id)
+                  ),
+                  ...(previous[id] ?? []),
+                ]
+              : list,
+          }))
+          setHistoryStartReached((previous) => ({
+            ...previous,
+            [id]: list.length === 0,
+          }))
+        }
       } catch (reason) {
         if (generation === epoch.current && request === selection.current) {
           if (api.mode === 'live' && errorStatus(reason) === 404) {
@@ -623,6 +651,21 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                 currentStaff={user}
                 loading={messageLoading}
                 pending={pending}
+                canLoadEarlier={
+                  !!selectedId &&
+                  !!messages[selectedId]?.length &&
+                  !historyStartReached[selectedId]
+                }
+                onLoadEarlier={() => {
+                  const first = selectedId
+                    ? messages[selectedId]?.[0]
+                    : undefined
+                  if (selectedId && first && !messageLoading)
+                    void loadMessages(selectedId, {
+                      createdAt: first.createdAt,
+                      id: first.id,
+                    })
+                }}
                 readOnly={api.mode === 'live' && !user?.canReply}
                 sendBlocked={
                   selectedId

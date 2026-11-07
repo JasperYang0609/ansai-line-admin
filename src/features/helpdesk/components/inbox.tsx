@@ -158,6 +158,8 @@ export function ChatPanel({
   pending,
   sendBlocked,
   readOnly,
+  canLoadEarlier,
+  onLoadEarlier,
   draft,
   onDraft,
   onSend,
@@ -172,6 +174,8 @@ export function ChatPanel({
   pending: boolean
   sendBlocked: boolean
   readOnly: boolean
+  canLoadEarlier: boolean
+  onLoadEarlier: () => void
   draft: string
   onDraft: (value: string) => void
   onSend: () => void
@@ -179,9 +183,10 @@ export function ChatPanel({
   onBack: () => void
 }) {
   const end = useRef<HTMLDivElement>(null)
+  const latestMessageId = messages[messages.length - 1]?.id
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'nearest' })
-  }, [conversation?.id, messages.length])
+  }, [conversation?.id, latestMessageId])
   if (!conversation)
     return (
       <section className='chat-panel chat-empty'>
@@ -231,12 +236,13 @@ export function ChatPanel({
       </header>
       {!readOnly && (
         <div className='handoff-bar' role='note'>
-          僅顯示已保存的近期紀錄。舊 AI 回覆與官方帳號後台的人工回覆可能未保存。
+          已保存的正文長期保留，可載入較早紀錄。舊 AI
+          回覆與官方帳號後台的人工回覆可能未保存。
         </div>
       )}
       {readOnly ? (
         <div className='handoff-bar' role='note'>
-          目前僅顯示已保存的近期客戶紀錄。部分訊息、AI
+          已保存的正文長期保留，可載入較早紀錄。部分舊訊息、AI
           回覆與真人回覆可能未保存。
         </div>
       ) : (
@@ -273,7 +279,16 @@ export function ChatPanel({
         aria-label='訊息紀錄'
         aria-busy={loading}
       >
-        {loading ? (
+        {canLoadEarlier && (
+          <button
+            className='small-button'
+            disabled={loading || pending}
+            onClick={onLoadEarlier}
+          >
+            {loading ? '載入中…' : '載入較早訊息'}
+          </button>
+        )}
+        {loading && !messages.length ? (
           <p className='empty-state' role='status'>
             正在載入訊息…
           </p>

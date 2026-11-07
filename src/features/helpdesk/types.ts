@@ -22,6 +22,7 @@ export type Message = {
     | 'unknown'
     | 'cancelled'
 }
+export type HistoryCursor = Pick<Message, 'id' | 'createdAt'>
 export type Conversation = {
   id: string
   customerName: string
@@ -38,7 +39,10 @@ export interface HelpdeskApi {
   login(email: string, password: string): Promise<Session>
   logout(): Promise<void>
   listConversations(): Promise<Conversation[]>
-  listMessages(conversationId: string): Promise<Message[]>
+  listMessages(
+    conversationId: string,
+    before?: HistoryCursor
+  ): Promise<Message[]>
   sendMessage(
     conversationId: string,
     body: string,

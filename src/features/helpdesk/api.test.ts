@@ -239,3 +239,38 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
     await expect(api.listConversations()).rejects.toMatchObject({ status: 401 })
   })
 })
+
+it('較早歷史使用原始時間與識別碼游標，不把微秒時間截斷', async () => {
+  const calls = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ access_token: '合成登入權杖' }))
+    .mockResolvedValueOnce(
+      Response.json({
+        id: 'a',
+        name: '合成客服',
+        email: 'a@example.test',
+        role: 'agent',
+      })
+    )
+    .mockResolvedValueOnce(Response.json([]))
+  vi.stubGlobal('fetch', calls)
+  const api = createLiveApi(
+    'https://admin.example.test',
+    'https://project.supabase.co',
+    key
+  )
+  await api.login('a@example.test', '合成密碼')
+  const before = {
+    createdAt: '2020-01-01T00:00:00.123456+00:00',
+    id: '80000000-0000-4000-8000-000000000001',
+  }
+  await api.listMessages('c', before)
+  const url = new URL(calls.mock.calls[2][0])
+  expect(url.searchParams.get('beforeAt')).toBe(before.createdAt)
+  expect(url.searchParams.get('beforeId')).toBe(before.id)
+  expect(calls.mock.calls[2][1].method).toBe('GET')
+  await expect(
+    api.listMessages('c', { ...before, createdAt: '錯誤時間' })
+  ).rejects.toMatchObject({ status: 400 })
+  expect(calls).toHaveBeenCalledTimes(3)
+})

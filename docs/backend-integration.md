@@ -25,7 +25,7 @@ VITE_ADMIN_API_URL 指向受維護者控制的 HTTPS 管理 API base；其下提
 
 GET /session → Staff（server membership 驗證通過才回覆）。
 GET /conversations → Conversation[]，v1 先限定最多 100 筆、有權查看的最近對話；不可用無限量 status dump。前端不代表已載入所有歷史。
-GET /conversations/:id/messages → Message[]，v1 最多 100 則，依建立時間與 id 穩定排序；只有此對話授權通過後才解密。歷史缺口不能捏造或以 AI 記憶冒充完整紀錄。
+GET /conversations/:id/messages → Message[]，每頁最多 100 則，依建立時間與 id 穩定排序；只有此對話授權通過後才解密。可帶 beforeAt 與 beforeId 查詢更早一頁，兩者必須一起提供。beforeAt 保留原時間精度，beforeId 使用該頁最早訊息的識別碼。分頁不設日期期限，不能把超過三十天或較舊的已保存正文隱藏。歷史缺口不能捏造或以 AI 記憶冒充完整紀錄。
 GET /staff → Staff[]，只提供本 tenant 有權查看的客服資訊；不可跨租戶列全站帳號。
 POST /conversations/:id/mode，body = { mode: ai | human, expectedVersion: integer } → Conversation。
 POST /conversations/:id/messages，body = { body: string, expectedVersion: integer, requestId: UUIDv4 } → Message（可以是 queued，之後讀取歷史確認最終狀態）。
@@ -56,3 +56,9 @@ POST /conversations/:id/messages，body = { body: string, expectedVersion: integ
 現有服務的 migration、員工權限硬化、長期收件人／AI／真人正文保存、人工 push 成本與 retention、正式雲端 origin／登入帳號及測試收件人，必須先確認範圍。這個教學版沒有取得、部署或自動啟用它們。
 
 在這些後端缺口補齊前，本 repo 的課堂示範可驗證 UI，但整案 live 功能為 BLOCKED；不是已接好 LINE 的正式客服。現有 OA Manager 人工訊息／被清掉的舊 AI 正文都不會因此自動還原。
+
+## 正文與收件人分開保存
+
+本接線版本的客服正文長期保存。未經維護者明確核准，不得按期限清空、刪除或隱藏正文。每頁數量上限是分頁大小，不是歷史保存期限，前端提供載入較早訊息。
+
+收件人識別碼用於人工推播路由，擷取、期限及清理須另行核准。正文查閱不依賴收件人資料仍存在，清理收件人不能連帶清空正文。
