@@ -1,11 +1,4 @@
-import {
-  Blocks,
-  Bot,
-  Cable,
-  Code2,
-  MessageSquare,
-  UsersRound,
-} from 'lucide-react'
+import { Bot, Cable, MessageSquare, UsersRound } from 'lucide-react'
 import type { Conversation, Message, Staff } from '../types'
 
 export function StaffPage({
@@ -23,7 +16,7 @@ export function StaffPage({
       <div className='surface'>
         <div className='surface-title'>
           <h3>團隊名單</h3>
-          <span className='tag'>唯讀</span>
+          <span className='tag'>名單僅供查看</span>
         </div>
         {loading ? (
           <p className='empty-state'>正在載入成員…</p>
@@ -116,7 +109,13 @@ export function ReportsPage({
     </section>
   )
 }
-export function SettingsPage({ demo }: { demo: boolean }) {
+export function SettingsPage({
+  demo,
+  canReply,
+}: {
+  demo: boolean
+  canReply: boolean
+}) {
   return (
     <section className='module-page'>
       <div className='page-eyebrow'>系統設定</div>
@@ -129,14 +128,16 @@ export function SettingsPage({ demo }: { demo: boolean }) {
             目前模式
           </h3>
           <span className={'mode-badge ' + (demo ? 'demo' : 'human')}>
-            {demo ? '示範環境' : '真實 API 模式'}
+            {demo ? '示範環境' : '正式環境'}
           </span>
         </div>
-        <h4>{demo ? '安心練習，不會傳送至 LINE' : '使用已設定的後端服務'}</h4>
+        <h4>{demo ? '安心練習，不會傳送至 LINE' : '使用團隊客服服務'}</h4>
         <p>
           {demo
             ? '顧客、客服與訊息皆為示範資料，重新整理頁面後會重設。'
-            : '登入與查閱由後端驗證。目前只開放已保存紀錄查閱，接手、恢復 AI 與人工發送留待後續。'}
+            : canReply
+              ? '目前帳號可查看授權對話，接手後回覆顧客，並在需要時交回 AI。每次操作仍會核對您的權限與對話狀態。'
+              : '目前帳號可查看授權對話與已保存的歷史。如需接手或發送訊息，請聯絡團隊管理員核准操作權限。'}
         </p>
         <p className='surface-note'>
           連線設定由專案管理員維護，此頁不會變更設定。
@@ -145,30 +146,30 @@ export function SettingsPage({ demo }: { demo: boolean }) {
     </section>
   )
 }
-export function LearningPage() {
+export function HelpPage({ demo }: { demo: boolean }) {
   return (
     <section className='module-page'>
-      <div className='page-eyebrow'>從範例到自己的專案</div>
-      <h2>學習與擴充</h2>
+      <div className='page-eyebrow'>客服工作台操作指南</div>
+      <h2>使用說明</h2>
       <p className='page-description'>
-        先理解一個流程，再加入你真正需要的功能。
+        查看對話、接手回覆，再把需要的工作交回 AI。
       </p>
       <div className='learning-grid'>
         {[
           {
             icon: MessageSquare,
-            title: '看懂客服流程',
-            text: '收件匣 → 開啟對話 → 真人接手 → 回覆 → 交回 AI。先用示範模式完整操作一次。',
+            title: '查看對話與歷史',
+            text: '從收件匣選擇顧客，查看您有權限讀取的對話。需要更早的內容時，使用「載入較早訊息」。新訊息會在即時連線正常時自動更新。',
           },
           {
-            icon: Code2,
-            title: '介面與資料分開',
-            text: '畫面集中在 helpdesk 功能資料夾，透過 HelpdeskApi 取得資料。更換資料來源，不必重寫每個畫面。',
+            icon: UsersRound,
+            title: '接手與交回 AI',
+            text: '有操作權限的客服可按「接手對話」，接手期間 AI 暫停回覆。確認內容後再送出訊息；完成服務時可按「交回 AI」，由 AI 接續處理之後的新訊息。',
           },
           {
-            icon: Blocks,
-            title: '從一個小功能開始',
-            text: '可以先練習新增對話篩選或顯示欄位，再逐步擴充模組。帳號權限與訊息發送仍須由後端驗證。',
+            icon: Bot,
+            title: '確認發送結果',
+            text: '「已送出（平台受理）」代表 LINE 已受理，不代表顧客已讀。若顯示「結果待確認」，請先聯絡管理員核對，避免再次傳送相同訊息。',
           },
         ].map(({ icon: Icon, title, text }) => (
           <article className='surface learning-card' key={title}>
@@ -181,8 +182,12 @@ export function LearningPage() {
         ))}
       </div>
       <div className='learning-callout'>
-        <strong>這是起點，不是限制。</strong>
-        <p>保留開源授權，依照實際需求逐步打造自己的工作台。</p>
+        <strong>{demo ? '目前是示範環境' : '資料與權限由團隊管理'}</strong>
+        <p>
+          {demo
+            ? '這裡使用示範資料，不會傳送訊息至 LINE；重新整理頁面後會重設。'
+            : '工作台只顯示您有權限查閱的紀錄。部分舊訊息及官方帳號原生後台的人工回覆可能未保存，遇到缺漏請向團隊確認。'}
+        </p>
       </div>
     </section>
   )

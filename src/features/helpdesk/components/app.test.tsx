@@ -388,6 +388,137 @@ function notificationFixture() {
   }
   return { api, notify: () => notify(), stop }
 }
+
+describe('正式工作台名稱與操作說明', () => {
+  it('正式模式沒有學習版或開發教學字眼，說明依操作權限顯示', async () => {
+    const demo = createDemoApi()
+    const send = vi.spyOn(demo, 'sendMessage')
+    const mode = vi.spyOn(demo, 'setMode')
+    const api: HelpdeskApi = {
+      ...demo,
+      mode: 'live',
+      login: async () => {
+        const session = await demo.login('teacher@example.test', '')
+        return {
+          ...session,
+          staff: { ...session.staff, name: '合成正式客服', canReply: true },
+        }
+      },
+    }
+    await render(<HelpdeskApp api={api} />)
+    await page
+      .getByRole('textbox', { name: '電子郵件' })
+      .fill('fixture@example.test')
+    await page.getByLabelText('密碼', { exact: true }).fill('合成密碼')
+    await page.getByRole('button', { name: '登入工作台' }).click()
+    await expect
+      .element(page.getByText('合成正式客服', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByText('學習版', { exact: true }))
+      .not.toBeInTheDocument()
+    await expect
+      .element(page.getByText('示範環境', { exact: true }))
+      .not.toBeInTheDocument()
+    await page.getByRole('button', { name: '連線設定', exact: true }).click()
+    await expect
+      .element(page.getByText('正式環境', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(
+        page.getByText(
+          '目前帳號可查看授權對話，接手後回覆顧客，並在需要時交回 AI。',
+          { exact: false }
+        )
+      )
+      .toBeVisible()
+    await expect
+      .element(
+        page.getByText('接手、恢復 AI 與人工發送留待後續', { exact: false })
+      )
+      .not.toBeInTheDocument()
+    await page.getByRole('button', { name: '客服成員', exact: true }).click()
+    await expect
+      .element(page.getByText('名單僅供查看', { exact: true }))
+      .toBeVisible()
+    await page.getByRole('button', { name: '使用說明', exact: true }).click()
+    await expect
+      .element(page.getByRole('heading', { name: '使用說明', exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('heading', { name: '確認發送結果', exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByText('資料與權限由團隊管理', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByText('介面與資料分開', { exact: true }))
+      .not.toBeInTheDocument()
+    expect(send).not.toHaveBeenCalled()
+    expect(mode).not.toHaveBeenCalled()
+  })
+  it('真正唯讀權限仍明確顯示，不能因名稱整理而開放發送', async () => {
+    const demo = createDemoApi()
+    await render(
+      <HelpdeskApp
+        api={{
+          ...demo,
+          mode: 'live',
+          login: () => demo.login('teacher@example.test', ''),
+        }}
+      />
+    )
+    await page
+      .getByRole('textbox', { name: '電子郵件' })
+      .fill('fixture@example.test')
+    await page.getByLabelText('密碼', { exact: true }).fill('合成密碼')
+    await page.getByRole('button', { name: '登入工作台' }).click()
+    await expect
+      .element(page.getByText('正式紀錄 · 唯讀', { exact: true }))
+      .toBeVisible()
+    await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+    await expect
+      .element(page.getByRole('button', { name: '接手對話', exact: true }))
+      .not.toBeInTheDocument()
+    await expect
+      .element(page.getByRole('textbox', { name: /回覆訊息/ }))
+      .not.toBeInTheDocument()
+    await page.getByRole('button', { name: '連線設定', exact: true }).click()
+    await expect
+      .element(
+        page.getByText('如需接手或發送訊息，請聯絡團隊管理員核准操作權限。', {
+          exact: false,
+        })
+      )
+      .toBeVisible()
+  })
+  it('示範環境仍保留不連接 LINE 的明確提示，操作說明不假裝成正式資料', async () => {
+    await render(<HelpdeskApp api={createDemoApi()} />)
+    await page
+      .getByRole('button', { name: '進入示範工作台', exact: true })
+      .click()
+    await expect
+      .element(page.getByText('示範模式 · 不連接 LINE', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(page.getByText('示範環境', { exact: true }))
+      .toBeVisible()
+    await page
+      .getByRole('button', { name: '查看操作說明', exact: true })
+      .click()
+    await expect
+      .element(page.getByText('目前是示範環境', { exact: true }))
+      .toBeVisible()
+    await expect
+      .element(
+        page.getByText(
+          '這裡使用示範資料，不會傳送訊息至 LINE；重新整理頁面後會重設。',
+          { exact: true }
+        )
+      )
+      .toBeVisible()
+  })
+})
 async function openNotificationChat(api: HelpdeskApi) {
   await page.viewport(1280, 800)
   await render(<HelpdeskApp api={api} />)
