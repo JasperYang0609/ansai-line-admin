@@ -219,13 +219,26 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     Record<string, boolean>
   >({})
   const [pending, setPending] = useState(false)
+  const [syncState, setSyncState] = useState<
+    'connected' | 'connecting' | 'error'
+  >('connecting')
   const [unknownSends, setUnknownSends] = useState<Set<string>>(() => new Set())
   const mutationLock = useRef(false)
   const epoch = useRef(0)
   const selection = useRef(0)
+  const messagesRef = useRef(messages)
+  const syncContext = useRef({
+    selectedId,
+    tab,
+    loading,
+    messageLoading,
+    pending,
+  })
+  const resumeSync = useRef(() => {})
   const menuButton = useRef<HTMLButtonElement>(null)
   const drawerRef = useRef<HTMLElement>(null)
   const selected = conversations.find((c) => c.id === selectedId)
+  const userId = user?.id
 
   const clearSession = useCallback((text = '') => {
     epoch.current++
@@ -243,6 +256,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     setNotice(text)
     setLoading(false)
     setMessageLoading(false)
+    setSyncState('connecting')
   }, [])
   const handleError = useCallback(
     (reason: unknown) => {
@@ -339,6 +353,179 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     [api, handleError]
   )
   useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+  useEffect(() => {
+    syncContext.current = { selectedId, tab, loading, messageLoading, pending }
+    resumeSync.current()
+  }, [selectedId, tab, loading, messageLoading, pending])
+  useEffect(() => {
+    if (!userId || api.mode !== 'live' || !api.subscribe) return
+    let stopped = false
+    let working = false
+    let dirty = false
+    let channelConnected = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const generation = epoch.current
+    function schedule() {
+      // 只合併短時間內的通知，不定時查資料；沒有通知就沒有背景查詢。
+      if (!stopped && dirty && !working && !timer)
+        timer = setTimeout(() => {
+          timer = undefined
+          void update()
+        }, 200)
+    }
+    function changed() {
+      dirty = true
+      schedule()
+    }
+    resumeSync.current = schedule
+    async function update() {
+      const context = syncContext.current
+      if (
+        stopped ||
+        document.visibilityState === 'hidden' ||
+        context.loading ||
+        context.messageLoading ||
+        context.pending ||
+        mutationLock.current
+      )
+        return
+      working = true
+      dirty = false
+      const request = selection.current
+      const current = () =>
+        !stopped &&
+        generation === epoch.current &&
+        request === selection.current &&
+        !mutationLock.current
+      try {
+        const overview = await Promise.allSettled([
+          api.listConversations(),
+          api.listStaff(),
+          api.getSession?.(),
+        ])
+        if (!current()) {
+          dirty = true
+          return
+        }
+        const denied = overview.find(
+          (result) =>
+            result.status === 'rejected' &&
+            [401, 403].includes(errorStatus(result.reason))
+        )
+        if (denied?.status === 'rejected') throw denied.reason
+        if (overview[0].status === 'rejected') throw overview[0].reason
+        if (overview[1].status === 'rejected') throw overview[1].reason
+        if (overview[2].status === 'rejected') throw overview[2].reason
+        if (overview[2].value && overview[2].value.id !== userId)
+          throw new Error('員工身分已變更')
+        const allowed = new Set(overview[0].value.map((item) => item.id))
+        const id = context.selectedId
+        let incoming: Message[] = []
+        if (id && allowed.has(id) && context.tab === 'inbox') {
+          incoming = await api.listMessages(id)
+          const known = new Set(
+            (messagesRef.current[id] ?? []).map((item) => item.id)
+          )
+          let batch = incoming
+          // 補齊斷線期間超過一頁的訊息，保留先前已載入的較早歷史。
+          while (
+            current() &&
+            known.size &&
+            batch.length === 100 &&
+            !batch.some((item) => known.has(item.id))
+          ) {
+            const first = batch[0]
+            batch = await api.listMessages(id, {
+              id: first.id,
+              createdAt: first.createdAt,
+            })
+            if (batch.some((item) => item.id === first.id))
+              throw new Error('歷史分頁沒有前進')
+            incoming = [...batch, ...incoming]
+          }
+        }
+        if (!current()) {
+          dirty = true
+          return
+        }
+        setConversations(overview[0].value)
+        setStaff(overview[1].value)
+        if (overview[2].value) setUser(overview[2].value)
+        setMessages((previous) => {
+          const next = Object.fromEntries(
+            Object.entries(previous).filter(([key]) => allowed.has(key))
+          )
+          if (id && allowed.has(id) && context.tab === 'inbox') {
+            const combined = new Map(
+              (next[id] ?? []).map((item) => [item.id, item])
+            )
+            for (const item of incoming) combined.set(item.id, item)
+            next[id] = [...combined.values()].sort(
+              (a, b) =>
+                Date.parse(a.createdAt) - Date.parse(b.createdAt) ||
+                a.id.localeCompare(b.id)
+            )
+          }
+          return next
+        })
+        if (id && !allowed.has(id)) {
+          setDrafts((previous) =>
+            Object.fromEntries(
+              Object.entries(previous).filter(([key]) => key !== id)
+            )
+          )
+          setSelectedId(null)
+          setChatOpen(false)
+        }
+        if (channelConnected) setSyncState('connected')
+      } catch (reason) {
+        if (!current()) {
+          dirty = true
+          return
+        }
+        if ([401, 403].includes(errorStatus(reason))) handleError(reason)
+        else if (errorStatus(reason) === 404 && context.selectedId) {
+          const id = context.selectedId
+          setMessages((previous) => ({ ...previous, [id]: [] }))
+          setDrafts((previous) =>
+            Object.fromEntries(
+              Object.entries(previous).filter(([key]) => key !== id)
+            )
+          )
+          setConversations((previous) =>
+            previous.filter((item) => item.id !== id)
+          )
+          setSelectedId(null)
+          setChatOpen(false)
+        } else setSyncState('error')
+      } finally {
+        working = false
+        schedule()
+      }
+    }
+    function resume() {
+      if (document.visibilityState !== 'hidden') changed()
+    }
+    const stopSubscription = api.subscribe(changed, (state) => {
+      channelConnected = state === 'connected'
+      setSyncState(state)
+    })
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+      resumeSync.current = () => {}
+      stopSubscription()
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', resume)
+    }
+  }, [api, userId, handleError])
+  useEffect(() => {
     if (!drawer) return
     const container = drawerRef.current
     container?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -396,6 +583,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
       return
     }
     const generation = epoch.current
+    selection.current++
     mutationLock.current = true
     setPending(true)
     setError('')
@@ -630,6 +818,15 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
           {tab === 'inbox' ? (
             <>
               <ConversationList
+                syncStatus={
+                  api.mode === 'live'
+                    ? syncState === 'connected'
+                      ? '新訊息即時更新中'
+                      : syncState === 'error'
+                        ? '即時連線中斷，恢復連線後自動補讀'
+                        : '正在連接即時更新…'
+                    : undefined
+                }
                 conversations={conversations}
                 selectedId={selectedId}
                 query={query}

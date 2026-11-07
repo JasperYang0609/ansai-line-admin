@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { RealtimeClient } from '@supabase/realtime-js'
 import type {
   Conversation,
   HelpdeskApi,
@@ -323,6 +324,7 @@ export function createLiveApi(
   const key = publicKey(publishableKey)
   let token = ''
   let sessionGeneration = 0
+  let stopNotifications: (() => void) | undefined
   async function request(
     url: string,
     init: RequestInit = {},
@@ -422,7 +424,65 @@ export function createLiveApi(
   }
   return {
     mode: 'live',
+    async getSession() {
+      return parse(staffSchema, await call('/session'))
+    },
+    subscribe(changed, status) {
+      stopNotifications?.()
+      let stopped = false
+      let client: RealtimeClient | undefined
+      const generation = sessionGeneration
+      const stop = () => {
+        stopped = true
+        void client?.disconnect()
+      }
+      stopNotifications = stop
+      status('connecting')
+      void (async () => {
+        // 頻道範圍由管理 API 決定，不接受前端自行選擇租戶或員工。
+        const { topic } = parse(
+          z.object({
+            topic: z
+              .string()
+              .regex(/^helpdesk:[0-9a-f-]{36}:[0-9a-f-]{36}:[0-9a-f-]{36}$/),
+          }),
+          await call('/events')
+        )
+        if (stopped || generation !== sessionGeneration) return
+        client = new RealtimeClient(
+          authBase.replace(/^http/, 'ws') + '/realtime/v1',
+          {
+            params: { apikey: key },
+            accessToken: async () =>
+              generation === sessionGeneration ? token || null : null,
+          }
+        )
+        await client.setAuth(token)
+        if (stopped || generation !== sessionGeneration) {
+          stop()
+          return
+        }
+        client
+          .channel(topic, { config: { private: true } })
+          .on('broadcast', { event: 'changed' }, () => {
+            if (!stopped && generation === sessionGeneration) changed()
+          })
+          .subscribe((state) => {
+            if (stopped || generation !== sessionGeneration) return
+            status(state === 'SUBSCRIBED' ? 'connected' : 'error')
+            // 建立或恢復訂閱後補讀一次，補上斷線及首次載入的空窗。
+            if (state === 'SUBSCRIBED') changed()
+          })
+      })().catch(() => {
+        if (!stopped && generation === sessionGeneration) {
+          status('error')
+          changed()
+        }
+      })
+      return stop
+    },
     async login(email, password): Promise<Session> {
+      stopNotifications?.()
       const generation = ++sessionGeneration
       token = ''
       if (!email.trim() || !password)
@@ -449,6 +509,7 @@ export function createLiveApi(
       }
     },
     async logout() {
+      stopNotifications?.()
       const old = token
       const generation = ++sessionGeneration
       token = ''

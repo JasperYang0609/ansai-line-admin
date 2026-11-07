@@ -1,9 +1,13 @@
+import { RealtimeClient, type RealtimeChannel } from '@supabase/realtime-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDemoApi, createHelpdeskApi, createLiveApi } from './api'
 
 const key = 'sb_publishable_classroom_fake'
 const id = () => crypto.randomUUID()
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 describe('明確分離示範與真實模式', () => {
   it('預設為示範，未知與不完整 live 設定不降級', () => {
     expect(createHelpdeskApi({}).mode).toBe('demo')
@@ -136,6 +140,73 @@ describe('真實 transport：伺服器權威與失敗行為', () => {
     expect(fetcher.mock.calls[1][1].headers.Authorization).toBe(
       'Bearer test-user-token'
     )
+  })
+  it('即時訂閱使用服務端頻道與員工憑證，重連補讀，登出後忽略晚到通知', async () => {
+    const topic = `helpdesk:${id()}:${id()}:${id()}`
+    const { api, fetcher } = fixture([
+      Response.json({ topic }),
+      new Response(null, { status: 204 }),
+    ])
+    let receive = () => {}
+    let subscribed = (state: string) => {
+      void state
+    }
+    const channel = {
+      on: vi.fn((_type: string, _filter: unknown, callback: () => void) => {
+        receive = callback
+        return channel
+      }),
+      subscribe: vi.fn((callback: (state: string) => void) => {
+        subscribed = callback
+        return channel
+      }),
+    }
+    const channelSpy = vi
+      .spyOn(RealtimeClient.prototype, 'channel')
+      .mockReturnValue(channel as unknown as RealtimeChannel)
+    const authSpy = vi
+      .spyOn(RealtimeClient.prototype, 'setAuth')
+      .mockResolvedValue()
+    const disconnect = vi
+      .spyOn(RealtimeClient.prototype, 'disconnect')
+      .mockResolvedValue('ok')
+    await api.login('fixture@example.test', '合成密碼')
+    const changed = vi.fn(),
+      status = vi.fn()
+    const stop = api.subscribe!(changed, status)
+    await vi.waitFor(() =>
+      expect(channelSpy).toHaveBeenCalledWith(topic, {
+        config: { private: true },
+      })
+    )
+    expect(fetcher.mock.calls[2][0]).toBe('https://admin.example.test/events')
+    expect(authSpy).toHaveBeenCalledWith('test-user-token')
+    subscribed('SUBSCRIBED')
+    receive()
+    subscribed('CHANNEL_ERROR')
+    subscribed('SUBSCRIBED')
+    expect(changed).toHaveBeenCalledTimes(3)
+    expect(status).toHaveBeenLastCalledWith('connected')
+    await api.logout()
+    receive()
+    subscribed('SUBSCRIBED')
+    expect(changed).toHaveBeenCalledTimes(3)
+    expect(disconnect).toHaveBeenCalled()
+    stop()
+  })
+  it('訂閱資格失敗不使用公開頻道，也不直接讀取客戶資料表', async () => {
+    const { api, fetcher } = fixture([new Response(null, { status: 403 })])
+    const channel = vi.spyOn(RealtimeClient.prototype, 'channel')
+    await api.login('fixture@example.test', '合成密碼')
+    const changed = vi.fn(),
+      status = vi.fn()
+    api.subscribe!(changed, status)
+    await vi.waitFor(() => expect(status).toHaveBeenLastCalledWith('error'))
+    expect(channel).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(
+      fetcher.mock.calls.every(([url]) => !String(url).includes('/rest/'))
+    ).toBe(true)
   })
   it('正式模式使用伺服器接手與發送端點，不傳作者或租戶', async () => {
     const conversation = {

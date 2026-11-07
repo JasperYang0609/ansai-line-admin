@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import {
   ArrowLeft,
   Bot,
@@ -26,6 +26,7 @@ export function ConversationList({
   onQuery,
   onFilter,
   onSelect,
+  syncStatus,
 }: {
   conversations: Conversation[]
   selectedId: string | null
@@ -35,6 +36,7 @@ export function ConversationList({
   onQuery: (value: string) => void
   onFilter: (value: string) => void
   onSelect: (id: string) => void
+  syncStatus?: string
 }) {
   const visible = conversations.filter(
     (c) =>
@@ -125,7 +127,7 @@ export function ConversationList({
         )}
       </div>
       <div className='list-footer'>
-        {visible.length} 段對話 · 使用重新整理取得最新內容
+        {visible.length} 段對話 · {syncStatus ?? '示範資料'}
       </div>
     </section>
   )
@@ -182,11 +184,33 @@ export function ChatPanel({
   onMode: (mode: 'ai' | 'human') => void
   onBack: () => void
 }) {
-  const end = useRef<HTMLDivElement>(null)
-  const latestMessageId = messages[messages.length - 1]?.id
-  useEffect(() => {
-    end.current?.scrollIntoView({ block: 'nearest' })
-  }, [conversation?.id, latestMessageId])
+  const history = useRef<HTMLDivElement>(null)
+  const position = useRef({
+    conversationId: '',
+    firstId: '',
+    height: 0,
+    top: 0,
+    follow: true,
+  })
+  useLayoutEffect(() => {
+    const element = history.current
+    if (!element) return
+    const previous = position.current
+    const changedConversation = previous.conversationId !== conversation?.id
+    // 正在往上閱讀時保留位置；只有原本在底部，才跟隨新訊息。
+    if (changedConversation || previous.follow)
+      element.scrollTop = element.scrollHeight
+    else if (previous.firstId !== messages[0]?.id)
+      element.scrollTop = previous.top + element.scrollHeight - previous.height
+    position.current = {
+      conversationId: conversation?.id ?? '',
+      firstId: messages[0]?.id ?? '',
+      height: element.scrollHeight,
+      top: element.scrollTop,
+      follow:
+        element.scrollHeight - element.scrollTop - element.clientHeight < 80,
+    }
+  })
   if (!conversation)
     return (
       <section className='chat-panel chat-empty'>
@@ -275,6 +299,18 @@ export function ChatPanel({
       )}
       <div
         className='message-history'
+        ref={history}
+        onScroll={(event) => {
+          const element = event.currentTarget
+          position.current = {
+            ...position.current,
+            top: element.scrollTop,
+            height: element.scrollHeight,
+            follow:
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              80,
+          }
+        }}
         role='log'
         aria-label='訊息紀錄'
         aria-busy={loading}
@@ -328,7 +364,6 @@ export function ChatPanel({
             </article>
           ))
         )}
-        <div ref={end} />
       </div>
       {!readOnly && (
         <form

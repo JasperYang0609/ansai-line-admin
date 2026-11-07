@@ -36,6 +36,11 @@ export type Conversation = {
 }
 export interface HelpdeskApi {
   readonly mode: 'demo' | 'live'
+  getSession?: () => Promise<Staff>
+  subscribe?: (
+    changed: () => void,
+    status: (state: 'connected' | 'connecting' | 'error') => void
+  ) => () => void
   login(email: string, password: string): Promise<Session>
   logout(): Promise<void>
   listConversations(): Promise<Conversation[]>
