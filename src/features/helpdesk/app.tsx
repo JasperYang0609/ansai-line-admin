@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { ChatPanel, ConversationList } from './components/inbox'
 import {
-  LearningPage,
+  HelpPage,
   ReportsPage,
   SettingsPage,
   StaffPage,
@@ -34,7 +34,7 @@ const navigation = [
   { id: 'staff', label: '客服成員', icon: UsersRound },
   { id: 'reports', label: '訊息概況', icon: ChartNoAxesCombined },
   { id: 'settings', label: '連線設定', icon: Settings2 },
-  { id: 'learning', label: '學習與擴充', icon: BookOpen },
+  { id: 'learning', label: '使用說明', icon: BookOpen },
 ] as const
 function errorStatus(error: unknown) {
   return typeof error === 'object' && error !== null && 'status' in error
@@ -704,7 +704,10 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
         </div>
         <div className='workspace-label'>
           <span className='workspace-dot' />
-          客服工作台<span className='workspace-edition'>學習版</span>
+          客服工作台
+          {api.mode === 'demo' && (
+            <span className='workspace-edition'>示範環境</span>
+          )}
         </div>
         <p className='nav-label'>工作空間</p>
         <nav>
@@ -729,15 +732,15 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
         <div className='sidebar-bottom'>
           <div className='learning-promo'>
             <BookOpen size={18} />
-            <strong>從這裡，開始打造。</strong>
-            <p>理解流程，再做出自己的功能。</p>
+            <strong>操作有疑問？</strong>
+            <p>查看對話與客服協作說明。</p>
             <button
               onClick={() => {
                 setTab('learning')
                 closeDrawer()
               }}
             >
-              探索擴充方式 <ChevronRight size={14} />
+              查看操作說明 <ChevronRight size={14} />
             </button>
           </div>
           <div className='user-panel'>
@@ -898,9 +901,12 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               demo={api.mode === 'demo'}
             />
           ) : tab === 'settings' ? (
-            <SettingsPage demo={api.mode === 'demo'} />
+            <SettingsPage
+              demo={api.mode === 'demo'}
+              canReply={!!user.canReply}
+            />
           ) : (
-            <LearningPage />
+            <HelpPage demo={api.mode === 'demo'} />
           )}
         </main>
       </div>

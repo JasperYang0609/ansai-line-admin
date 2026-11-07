@@ -107,7 +107,7 @@ it.each([320, 390, 1440])(
         .toHaveValue('跨色系保留草稿')
       noOverflow()
       assertReadable()
-      for (const name of ['客服成員', '訊息概況', '連線設定', '學習與擴充']) {
+      for (const name of ['客服成員', '訊息概況', '連線設定', '使用說明']) {
         await navigate(name)
         noOverflow()
         assertReadable()
