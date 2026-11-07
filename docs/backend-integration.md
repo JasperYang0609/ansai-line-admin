@@ -39,7 +39,7 @@ POST /conversations/:id/messages，body = { body: string, expectedVersion: integ
 - 在交易內固定作者與正文、保存訊息並取得唯一發送權；AI／真人／接手／恢復共享同一份鎖與 fencing。
 - requestId 與 tenant/author/conversation/canonical payload 綁定；相同指令重播回傳原結果，改內容則 409。去重查詢不能只放在前端。
 - requestId 相同且已成功的結果，即使版本已往前，也應能授權後讀回原狀態；不得第二次呼叫 LINE。
-- UTF-8 大小／文字長度、每人與每 tenant 的速率／每日 push 預算與併發由伺服器控制。前端 5000 字限制只是 UX，實際通路更嚴格時，後端須拒絕而不是靜默截字。
+- UTF-8 大小／文字長度、每人與每 tenant 的速率及併發由伺服器控制；預設及教學安裝不設每日人工發送上限。若店家另外明確設定每日限制，仍由伺服器驗證，不由前端判斷。前端 5000 字限制只是 UX，實際通路更嚴格時，後端須拒絕而不是靜默截字。
 - 進行中的 AI 發送、未知結果或真人發送必須阻擋衝突狀態切換；不能只把資料寫進另一張表就宣稱防雙答。
 - 真正非同步人工回覆通常要 push；reply token 不是長效人工發送憑證。需先核准 LINE 額度與長期保存加密 recipient 的範圍。
 - 網路不明／崩潰後不自動重送；同 requestId 調和原狀態，必要時由主管核對。紀錄包含實際 wire body，不在清空暫存 outbox 後失去正文。
