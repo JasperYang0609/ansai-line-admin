@@ -1616,3 +1616,99 @@ select:focus-visible {
 .helpdesk-theme button {
   transition: none;
 }
+
+/* Customer context is separate from the LINE composer. */
+.customer-chat-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.customer-details {
+  min-width: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  padding: 20px;
+  border-left: 1px solid var(--control-border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.customer-details h2 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.customer-details h3,
+.customer-details label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.customer-details p,
+.customer-details small {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.customer-details textarea,
+.customer-details input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+.customer-details textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.customer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+}
+.customer-tags li {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  padding-left: 8px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.customer-tags li span {
+  min-width: 0;
+}
+.customer-tag-entry {
+  display: grid;
+  gap: 8px;
+}
+@media (max-width: 1250px) {
+  .customer-chat-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+    display: block;
+  }
+  .customer-chat-workspace .chat-panel {
+    min-height: 600px;
+    height: 75dvh;
+  }
+  .customer-details {
+    border-left: 0;
+    border-top: 1px solid var(--control-border);
+    overflow: visible;
+  }
+}
+@media (max-width: 640px) {
+  .customer-chat-workspace {
+    display: none;
+  }
+  .chat-open .customer-chat-workspace {
+    display: block;
+    height: 100%;
+  }
+}

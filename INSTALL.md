@@ -16,6 +16,8 @@
 
 除既有 session／staff／conversations／messages 外，需核對管理函式的 `GET /events`：由服務端核准員工並回傳本人私人通知頻道，瀏覽器以既有員工登入憑證訂閱 Supabase 廣播。資料保存、發送狀態及分派改變後提醒更新；沒有固定五秒查詢。不能把私人正文表直接開放給客戶端複寫，也不新增 Cloudflare Worker。若員工或通知接線尚未完成，明確列為待辦，不改用公開頻道或放寬 RLS。
 
+新增客戶側欄前，另做 capability preflight：以既有員工授權唯讀核對 `GET /conversations/:conversationId/customer` 是否回傳完整 note／tags／version／updatedAt／updatedBy／canEdit，並檢查後端是否已實作相容 POST 與 expectedVersion 衝突保護。未授權寫入前不要為 preflight 試存。404／405／501 需更新後端或核對路由與可見性，403 為權限不足，503 為暫時不可用；停止該能力驗收，不退 demo、不假保存。其他已可用功能不因此被描述為全部未接線。實際寫入／跨登入讀回及 AI 讀取測試須另按核准範圍驗收，詳見[客戶資料契約](docs/backend-integration.md#客戶內部記事與標籤2026-11-08-新增契約)。AI 預設會讀取同客戶記事與標籤作參考，不直接傳送至 LINE，也不與 OA 原生標籤同步。
+
 通知、接手與人工發送都是各自授權的服務端能力；不因安裝 UI 就自動開啟。LINE OA 原生後台人工回覆及原先沒有保存的舊 AI 正文，不會自動回填。正文長期保存，收件人保存政策另外核准，不能綁成三十天期限。
 
 老師會依序帶學員完成各自的 Supabase、Cloudflare、Webhook 與 Embedding；本入口是在該環境上安裝客服後台，不是強制先做展示版。沿用學員本人確認的專案、公開連線參數與課堂提供的設定，不重建服務、不切換帳號、不更改既有 Webhook 或 Embedding 模型／索引。缺少必要設定就列出缺項並停止，不退回假資料宣稱成功。

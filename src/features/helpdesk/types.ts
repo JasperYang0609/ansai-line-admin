@@ -34,7 +34,23 @@ export type Conversation = {
   unread: number
   tags: string[]
 }
+export type CustomerDetails = {
+  note: string
+  tags: string[]
+  version: number
+  updatedAt: string | null
+  updatedBy: { id: string; name: string } | null
+  canEdit: boolean
+}
+export type CustomerUpdate = Pick<CustomerDetails, 'note' | 'tags'> & {
+  expectedVersion: number
+}
 export interface HelpdeskApi {
+  getCustomer(conversationId: string): Promise<CustomerDetails>
+  updateCustomer(
+    conversationId: string,
+    update: CustomerUpdate
+  ): Promise<CustomerDetails>
   readonly mode: 'demo' | 'live'
   getSession?: () => Promise<Staff>
   subscribe?: (

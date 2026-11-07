@@ -11,6 +11,10 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import {
+  CustomerDetailsPanel,
+  type CustomerGuard,
+} from './components/customer-details'
 import { ChatPanel, ConversationList } from './components/inbox'
 import {
   HelpPage,
@@ -223,6 +227,17 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     'connected' | 'connecting' | 'error'
   >('connecting')
   const [unknownSends, setUnknownSends] = useState<Set<string>>(() => new Set())
+  const customerGuard = useRef<CustomerGuard>({ dirty: false, saving: false })
+  function allowCustomerLeave() {
+    if (customerGuard.current.saving) {
+      setError('客戶資料正在儲存，請等待結果後再離開。')
+      return false
+    }
+    return (
+      !customerGuard.current.dirty ||
+      window.confirm('客戶資料尚未儲存，離開將捨棄草稿，是否繼續？')
+    )
+  }
   const mutationLock = useRef(false)
   const epoch = useRef(0)
   const selection = useRef(0)
@@ -641,7 +656,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
     }
   }
   async function logout() {
-    if (mutationLock.current) return
+    if (mutationLock.current || !allowCustomerLeave()) return
     clearSession()
     try {
       await api.logout()
@@ -717,6 +732,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               key={id}
               aria-current={tab === id ? 'page' : undefined}
               onClick={() => {
+                if (id !== tab && !allowCustomerLeave()) return
                 setTab(id)
                 closeDrawer()
               }}
@@ -736,6 +752,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
             <p>查看對話與客服協作說明。</p>
             <button
               onClick={() => {
+                if (tab !== 'learning' && !allowCustomerLeave()) return
                 setTab('learning')
                 closeDrawer()
               }}
@@ -838,59 +855,86 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                 onQuery={setQuery}
                 onFilter={setFilter}
                 onSelect={(id) => {
+                  if (id !== selectedId && !allowCustomerLeave()) return
                   setSelectedId(id)
                   void loadMessages(id)
                   setChatOpen(true)
                   setError('')
                 }}
               />
-              <ChatPanel
-                conversation={selected}
-                messages={selectedId ? (messages[selectedId] ?? []) : []}
-                staff={staff}
-                currentStaff={user}
-                loading={messageLoading}
-                pending={pending}
-                canLoadEarlier={
-                  !!selectedId &&
-                  !!messages[selectedId]?.length &&
-                  !historyStartReached[selectedId]
-                }
-                onLoadEarlier={() => {
-                  const first = selectedId
-                    ? messages[selectedId]?.[0]
-                    : undefined
-                  if (selectedId && first && !messageLoading)
-                    void loadMessages(selectedId, {
-                      createdAt: first.createdAt,
-                      id: first.id,
-                    })
-                }}
-                readOnly={api.mode === 'live' && !user?.canReply}
-                sendBlocked={
-                  selectedId
-                    ? unknownSends.has(selectedId) ||
-                      (messages[selectedId] ?? []).some(
-                        (message) =>
-                          message.authorType !== 'customer' &&
-                          ['unknown', 'sending', 'queued'].includes(
-                            message.status
-                          )
+              <div className='customer-chat-workspace'>
+                <ChatPanel
+                  conversation={selected}
+                  messages={selectedId ? (messages[selectedId] ?? []) : []}
+                  staff={staff}
+                  currentStaff={user}
+                  loading={messageLoading}
+                  pending={pending}
+                  canLoadEarlier={
+                    !!selectedId &&
+                    !!messages[selectedId]?.length &&
+                    !historyStartReached[selectedId]
+                  }
+                  onLoadEarlier={() => {
+                    const first = selectedId
+                      ? messages[selectedId]?.[0]
+                      : undefined
+                    if (selectedId && first && !messageLoading)
+                      void loadMessages(selectedId, {
+                        createdAt: first.createdAt,
+                        id: first.id,
+                      })
+                  }}
+                  readOnly={api.mode === 'live' && !user?.canReply}
+                  sendBlocked={
+                    selectedId
+                      ? unknownSends.has(selectedId) ||
+                        (messages[selectedId] ?? []).some(
+                          (message) =>
+                            message.authorType !== 'customer' &&
+                            ['unknown', 'sending', 'queued'].includes(
+                              message.status
+                            )
+                        )
+                      : false
+                  }
+                  draft={selectedId ? (drafts[selectedId] ?? '') : ''}
+                  onDraft={(value) => {
+                    if (selectedId)
+                      setDrafts((previous) => ({
+                        ...previous,
+                        [selectedId]: value,
+                      }))
+                  }}
+                  onSend={() => void mutate('send')}
+                  onMode={(mode) => void mutate(mode)}
+                  onBack={() => {
+                    if (!allowCustomerLeave()) return
+                    setSelectedId(null)
+                    selection.current++
+                    setChatOpen(false)
+                  }}
+                />
+                {selected && (
+                  <CustomerDetailsPanel
+                    key={selected.id}
+                    api={api}
+                    conversationId={selected.id}
+                    guardRef={customerGuard}
+                    onUnauthorized={handleError}
+                    onSaved={(details) => {
+                      setConversations((previous) =>
+                        previous.map((c) =>
+                          c.id === selected.id
+                            ? { ...c, tags: details.tags }
+                            : c
+                        )
                       )
-                    : false
-                }
-                draft={selectedId ? (drafts[selectedId] ?? '') : ''}
-                onDraft={(value) => {
-                  if (selectedId)
-                    setDrafts((previous) => ({
-                      ...previous,
-                      [selectedId]: value,
-                    }))
-                }}
-                onSend={() => void mutate('send')}
-                onMode={(mode) => void mutate(mode)}
-                onBack={() => setChatOpen(false)}
-              />
+                      void loadOverview()
+                    }}
+                  />
+                )}
+              </div>
             </>
           ) : tab === 'staff' ? (
             <StaffPage staff={staff} loading={loading} />

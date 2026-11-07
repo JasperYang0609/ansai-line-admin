@@ -89,3 +89,18 @@ A02／A03／A05／A08／A10 的本次反例由 scripts/setup-tests.mjs 覆蓋：
 ## 2026-11-07 託管角色與設定範本校正
 
 固定 Cloudflare Pages 僅前端 hosting／Supabase Edge Functions 後端；不因缺少管理 API 而另建 Worker。LLM 需先唯讀核對使用者指定的既有 Function 與權限，缺少實作時報最小接線差異，不憑空要求 API URL。.env.example 改為課堂 live 接線範本，公開 URL/key 留空；這不是覆寫既有環境或已完成管理 API 的證據。無設定的新 clone 執行行為不變，抄範本後缺項應明確失敗，不退 demo。新增反例驗證固定分工、先探索再問、網址不能混用、範本不得預填虛構端點或秘密。未改 API／Auth／RLS／部署／Webhook／Embedding。
+
+## 2026-11-08 客戶記事／標籤前端增量
+
+沿用現有基線；僅增加相同管理 API bearer 下的客戶資料 GET／POST adapter、側欄與 demo 記憶體實作，不修改 Auth、RLS、DB、LINE、模型或部署。這是前端驗證，不是正式後端安全／持久化／AI 讀取驗收。公開庫不包含私有後端實作或路徑；沒有新增依賴。回復點為功能前的 4702ecac14e64a80709dbd0150eec1aea9283630；回退 UI 不應刪除後端已保存資料。
+
+受影響控制與可重跑證據：
+
+- A01／A07：canEdit 只控制 UI；後端仍須逐次授權。新增客戶 API 的 401 清 session，403 拒絕編輯；晚到舊登入回應不跨 session 使用。customer.test.ts 與 customer-details.browser.test.tsx 覆蓋未登入、唯讀、403、401 與切換／登出競態；不宣稱這些 mocks 證明跨租戶後端隔離。
+- A05／A08：記事、標籤、更新人以 React 純文字呈現；HTML／script／svg 反例不產生可執行元素。API 嚴格驗證回傳欄位、ISO 時間、非負安全整數版本與字數；記事 5000、標籤 10×30 Unicode codepoints、trim／去重、清空與超限拒絕有測試。沿用 1MiB 回應上限、路徑編碼限制與 no-store，不寫 browser storage 或 log。
+- A06／A10：expectedVersion 原子一致性是後端責任。前端 409 保留草稿、停止重試並要求明確確認重新載入；404／405／501 明示後端需更新，不假保存；503／連線錯誤／無效成功回應 fail closed。儲存中不重送、不切客戶；未存草稿離開對話／模組／手動登出／窄版返回需確認，頁面離開提供 beforeunload。權限撤銷與登入失效優先清除，不為草稿繞過安全。重讀列表或切換主題不覆蓋草稿。
+- AI 邊界：提示預設可讀同客戶資料作參考，不誤稱 AI 無法讀取；本前端不呼叫模型。記事不是系統指令，不能提供工具權限或觸發跨客戶查詢。服務端的同租戶／通道／客戶綁定、低信任上下文與 prompt-injection 負向測試須由後端維護者提供，未部署前仍待驗。
+
+驗證範圍為本機 Node 24／pnpm 11.24、既有 Chrome 的 API fixture 與實際瀏覽器 UI 測試，含 320／390／1440 responsive 及既有三主題／unknown-send 回歸；完整 test／lint／format／build 結果以此提交的驗證紀錄及後續 exact CI 為準。沒有連接正式帳號、客戶資料、LINE 或模型。跨登入持久保存、真實租戶隔離、實體手機／Safari 與正式 AI 行為未驗；正式發布仍需獨立 review、exact CI 與核准部署。
+
+本次本機最終候選驗證：pnpm test 共 28 檔／246 項通過（新增客戶 22 項 API／邊界＋30 項瀏覽器，共 52 項）；pnpm test:setup 25 項通過；lint、format:check、tsc／Vite build、git diff --check 均通過。既有三主題對比與 unknown-send 鎖定反例保持通過。遠端 exact CI 與正式能力尚待父級審查／發布，不由本機測試代替。
