@@ -920,6 +920,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                     key={selected.id}
                     api={api}
                     conversationId={selected.id}
+                    customerName={selected.customerName}
                     guardRef={customerGuard}
                     onUnauthorized={handleError}
                     onSaved={(details) => {
