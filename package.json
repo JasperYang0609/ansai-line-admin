@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:live": "node scripts/verify-live-build.mjs && pnpm build && node scripts/verify-live-build.mjs --artifact",
+    "test:live-build": "node --test scripts/live-build-tests.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "format:check": "prettier --check .",
