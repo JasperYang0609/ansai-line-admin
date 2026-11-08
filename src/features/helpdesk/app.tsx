@@ -746,20 +746,22 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
           ))}
         </nav>
         <div className='sidebar-bottom'>
-          <div className='learning-promo'>
-            <BookOpen size={18} />
-            <strong>操作有疑問？</strong>
-            <p>查看對話與客服協作說明。</p>
-            <button
-              onClick={() => {
-                if (tab !== 'learning' && !allowCustomerLeave()) return
-                setTab('learning')
-                closeDrawer()
-              }}
-            >
-              查看操作說明 <ChevronRight size={14} />
-            </button>
-          </div>
+          {api.mode === 'demo' && (
+            <div className='learning-promo'>
+              <BookOpen size={18} />
+              <strong>操作有疑問？</strong>
+              <p>查看對話與客服協作說明。</p>
+              <button
+                onClick={() => {
+                  if (tab !== 'learning' && !allowCustomerLeave()) return
+                  setTab('learning')
+                  closeDrawer()
+                }}
+              >
+                查看操作說明 <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
           <div className='user-panel'>
             <span className='avatar staff-avatar'>{user.name.slice(0, 1)}</span>
             <div>
@@ -795,18 +797,16 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
           </div>
           <div className='topbar-actions'>
             <ThemeSelector theme={theme} onChange={changeTheme} />
-            <span
-              className={
-                'environment-badge ' + (api.mode === 'demo' ? 'demo' : '')
-              }
-            >
-              <span />
-              {api.mode === 'demo'
-                ? '示範模式 · 不連接 LINE'
-                : user?.canReply
-                  ? '正式紀錄 · 客服操作'
-                  : '正式紀錄 · 唯讀'}
-            </span>
+            {api.mode === 'demo' && (
+              <span
+                className={
+                  'environment-badge ' + (api.mode === 'demo' ? 'demo' : '')
+                }
+              >
+                <span />
+                示範模式 · 不連接 LINE
+              </span>
+            )}
             <button
               className='icon-button'
               aria-label='重新整理資料'

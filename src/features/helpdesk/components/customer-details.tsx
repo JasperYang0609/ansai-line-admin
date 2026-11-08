@@ -176,9 +176,7 @@ export function CustomerDetailsPanel({
       )}
       {saved && (
         <>
-          {!saved.canEdit && (
-            <p role='note'>客戶資料為唯讀；編輯權限由後端決定。</p>
-          )}
+          {!saved.canEdit && <p role='note'>目前僅可查看客戶資料。</p>}
           <div className='customer-note-group'>
             <label htmlFor='customer-note'>內部記事</label>
             <textarea

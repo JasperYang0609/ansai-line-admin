@@ -309,8 +309,8 @@ it.each([320, 390, 768, 1024, 1280, 1440, 1920])(
         parseFloat(getComputedStyle(element('.customer-details h2')).fontSize)
       )
       await expect
-        .element(page.getByRole('note'))
-        .toHaveTextContent('已保存的正文長期保留')
+        .element(page.getByText('歷史紀錄說明', { exact: true }))
+        .toBeVisible()
       await expect.element(page.getByText('已受理不代表顧客已讀')).toBeVisible()
     }
     if (width <= 640) {
