@@ -118,6 +118,7 @@ pnpm dev --host 127.0.0.1
 - 輸出目錄：`dist`，不是 `src`、repo 根目錄或 node_modules。
 - Pages build environment：`NODE_VERSION=24.22.0`、`PNPM_VERSION=11.24.0`、`SKIP_DEPENDENCY_INSTALL=true`。另依課堂確認的專案設定 `VITE_HELPDESK_MODE=live` 與公開連線參數；Production／Preview 目標須分別確認，不把 Preview 誤接正式收件人。跳過 Pages 的自動安裝是為了由 setup 統一執行 frozen install，不是跳過依賴檢查。
 - 也可在已驗證的本機／CI 建置後，以 Pages Direct Upload 交付同一份 `dist`；這條路不會在 Cloudflare 重新建置，不把整個 repo／環境檔上傳。先確認專案使用 Git integration 還是 Direct Upload，不自行切換既有部署方式。
+- 正式 Direct Upload 必須改用 `pnpm build:live`：建置前確認正式環境的四個公開連線值，建置後再核對壓縮產物的預設 adapter。一般 `pnpm build` 缺環境時仍可產生示範版，不能直接拿來發布正式後台。建置設定應在本機受控環境或已核准的環境檔，不提交憑證，不用範本覆寫既有檔案。
 - 目前沒有頂層 `404.html`，可沿用 Pages 的預設 SPA fallback；若未來新增前端路由，驗證直接輸入 URL 與重新整理，不隨意把 API 錯誤 rewrite 成成功頁。
 
 部署完成須回讀 Pages 的實際部署版本／commit 或 artifact、正式網址與 HTTPS；驗證目標環境登入、對話載入、三主題與窄版；發送僅限已確認的測試收件人。保留上一個可用 deployment，失敗時回復，不以 build 成功或 URL 存在代替畫面驗收。維護者既有 Pages 的受控驗收見發布紀錄；新帳號、不同瀏覽器及學員環境仍須各自驗證。
