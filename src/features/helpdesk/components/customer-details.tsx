@@ -179,76 +179,80 @@ export function CustomerDetailsPanel({
           {!saved.canEdit && (
             <p role='note'>客戶資料為唯讀；編輯權限由後端決定。</p>
           )}
-          <label htmlFor='customer-note'>內部記事</label>
-          <textarea
-            id='customer-note'
-            value={note}
-            readOnly={!editable}
-            rows={6}
-            onChange={(e) => {
-              setNote(e.target.value)
-              setNotice('')
-            }}
-            aria-describedby='customer-note-count'
-          />
-          <small id='customer-note-count'>
-            {codepoints(note)} / 5000 字
-            {codepoints(note) > 5000 ? ' · 已超過限制' : ''}
-          </small>
-          <h3>客戶標籤（{tags.length} / 10）</h3>
-          <ul className='customer-tags'>
-            {tags.map((value) => (
-              <li key={value}>
-                <span>{value}</span>
-                {saved.canEdit && (
-                  <button
-                    className='icon-button'
-                    aria-label={'移除標籤 ' + value}
-                    disabled={!editable}
-                    onClick={() => {
-                      setTags(tags.filter((t) => t !== value))
-                      setNotice('')
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {saved.canEdit && (
-            <div className='customer-tag-entry'>
-              <label htmlFor='customer-tag'>新增標籤</label>
-              <input
-                id='customer-tag'
-                value={tag}
-                disabled={!editable}
-                onChange={(e) => setTag(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    addTag()
+          <div className='customer-note-group'>
+            <label htmlFor='customer-note'>內部記事</label>
+            <textarea
+              id='customer-note'
+              value={note}
+              readOnly={!editable}
+              rows={6}
+              onChange={(e) => {
+                setNote(e.target.value)
+                setNotice('')
+              }}
+              aria-describedby='customer-note-count'
+            />
+            <small id='customer-note-count'>
+              {codepoints(note)} / 5000 字
+              {codepoints(note) > 5000 ? ' · 已超過限制' : ''}
+            </small>
+          </div>
+          <div className='customer-tag-group'>
+            <h3>客戶標籤（{tags.length} / 10）</h3>
+            <ul className='customer-tags'>
+              {tags.map((value) => (
+                <li key={value}>
+                  <span>{value}</span>
+                  {saved.canEdit && (
+                    <button
+                      className='icon-button'
+                      aria-label={'移除標籤 ' + value}
+                      disabled={!editable}
+                      onClick={() => {
+                        setTags(tags.filter((t) => t !== value))
+                        setNotice('')
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {saved.canEdit && (
+              <div className='customer-tag-entry'>
+                <label htmlFor='customer-tag'>新增標籤</label>
+                <input
+                  id='customer-tag'
+                  value={tag}
+                  disabled={!editable}
+                  onChange={(e) => setTag(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      addTag()
+                    }
+                  }}
+                />
+                <small>
+                  {codepoints(tag.trim())} / 30 字 · 去除前後空白、重複標籤合併
+                </small>
+                <button
+                  className='small-button'
+                  disabled={
+                    !editable ||
+                    !tag.trim() ||
+                    codepoints(tag.trim()) > 30 ||
+                    (tags.length >= 10 && !tags.includes(tag.trim()))
                   }
-                }}
-              />
-              <small>
-                {codepoints(tag.trim())} / 30 字 · 去除前後空白、重複標籤合併
-              </small>
-              <button
-                className='small-button'
-                disabled={
-                  !editable ||
-                  !tag.trim() ||
-                  codepoints(tag.trim()) > 30 ||
-                  (tags.length >= 10 && !tags.includes(tag.trim()))
-                }
-                onClick={addTag}
-              >
-                加入標籤
-              </button>
-              {tag && <small>請先加入或清空新增標籤，再儲存。</small>}
-            </div>
-          )}
+                  onClick={addTag}
+                >
+                  加入標籤
+                </button>
+                {tag && <small>請先加入或清空新增標籤，再儲存。</small>}
+              </div>
+            )}
+          </div>
           <p className='customer-updated'>
             最後更新：{saved.updatedBy?.name ?? '尚無更新人員'}
             <br />

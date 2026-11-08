@@ -259,13 +259,13 @@ export function ChatPanel({
         <ModeBadge mode={conversation.mode} />
       </header>
       {!readOnly && (
-        <div className='handoff-bar' role='note'>
+        <div className='handoff-bar history-notice' role='note'>
           已保存的正文長期保留，可載入較早紀錄。舊 AI
           回覆與官方帳號後台的人工回覆可能未保存。
         </div>
       )}
       {readOnly ? (
-        <div className='handoff-bar' role='note'>
+        <div className='handoff-bar history-notice' role='note'>
           已保存的正文長期保留，可載入較早紀錄。部分舊訊息、AI
           回覆與真人回覆可能未保存。
         </div>

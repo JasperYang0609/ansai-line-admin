@@ -218,3 +218,116 @@ it('live login fields and error notice use every palette without persisting cred
     THEMES.map(({ id }) => [THEME_STORAGE_KEY, id])
   )
 })
+
+it.each([320, 390, 768, 1024, 1280, 1440, 1920])(
+  'workspace surfaces preserve usable geometry, controls and mobile navigation at %s',
+  async (width) => {
+    await page.viewport(width, 900)
+    await render(<HelpdeskApp api={createDemoApi()} />)
+    await page.getByRole('button', { name: '進入示範工作台' }).click()
+    await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
+    await expect
+      .element(page.getByRole('textbox', { name: '內部記事' }))
+      .toBeVisible()
+    const element = (name: string) => root().querySelector<HTMLElement>(name)!
+    const rect = (name: string) => element(name).getBoundingClientRect()
+    for (const theme of THEMES) {
+      await selector().selectOptions(theme.id)
+      noOverflow()
+      assertReadable()
+      const workspace = rect('.inbox-layout')
+      const chat = rect('.chat-panel')
+      const list = rect('.conversation-list')
+      const details = rect('.customer-details')
+      const exterior = width <= 640 ? 8 : 16
+      expect(getComputedStyle(element('.inbox-layout')).paddingLeft).toBe(
+        exterior + 'px'
+      )
+      for (const name of [
+        '.conversation-list',
+        '.chat-panel',
+        '.customer-details',
+      ]) {
+        const style = getComputedStyle(element(name))
+        expect(style.borderRadius).toBe('16px')
+        expect(style.borderTopWidth).toBe('1px')
+        expect(style.boxShadow).not.toBe('none')
+      }
+      expect(chat.width).toBeGreaterThanOrEqual(width <= 640 ? width - 18 : 370)
+      expect(rect('.message-history').height).toBeGreaterThan(240)
+      expect(chat.right).toBeLessThanOrEqual(workspace.right - exterior + 1)
+      if (width > 640) {
+        expect(list.left - workspace.left).toBeCloseTo(exterior, 0)
+        expect(chat.left - list.right).toBeCloseTo(12, 0)
+        expect(chat.width).toBeGreaterThan(list.width)
+        const row = rect('.conversation-item.selected')
+        expect(row.left - list.left).toBeGreaterThanOrEqual(8)
+        expect(list.right - row.right).toBeGreaterThanOrEqual(8)
+      }
+      if (width > 1250) {
+        expect(details.left - chat.right).toBeCloseTo(12, 0)
+        expect(details.top).toBe(chat.top)
+        expect(chat.width).toBeGreaterThan(details.width)
+      } else {
+        expect(details.top - chat.bottom).toBeCloseTo(12, 0)
+      }
+      const selected = getComputedStyle(element('.conversation-item.selected'))
+      expect(selected.borderRadius).toBe('10px')
+      expect(selected.borderLeftWidth).toBe(selected.borderRightWidth)
+      expect(selected.backgroundColor).not.toBe(
+        getComputedStyle(element('.conversation-list')).backgroundColor
+      )
+      for (const name of [
+        '.search-box',
+        '.small-button',
+        '.primary-button',
+        '#customer-note',
+        '#customer-tag',
+      ])
+        expect(getComputedStyle(element(name)).borderRadius).toBe('10px')
+      for (const name of [
+        '.message-bubble',
+        '.composer',
+        '.customer-tag-entry',
+        '.conversation-item',
+      ])
+        expect(getComputedStyle(element(name)).boxShadow).toBe('none')
+      expect(getComputedStyle(element('.composer')).borderRadius).toBe('16px')
+      expect(
+        getComputedStyle(element('.composer textarea')).borderTopWidth
+      ).toBe('0px')
+      const send = rect('.composer .primary-button')
+      const composer = rect('.composer')
+      expect(composer.right - send.right).toBeLessThanOrEqual(14)
+      expect(composer.bottom - send.bottom).toBeLessThanOrEqual(14)
+      expect(rect('.customer-name').bottom).toBeLessThan(
+        rect('#customer-note').top
+      )
+      expect(
+        parseFloat(getComputedStyle(element('.customer-name')).fontSize)
+      ).toBeGreaterThan(
+        parseFloat(getComputedStyle(element('.customer-details h2')).fontSize)
+      )
+      await expect
+        .element(page.getByRole('note'))
+        .toHaveTextContent('已保存的正文長期保留')
+      await expect.element(page.getByText('已受理不代表顧客已讀')).toBeVisible()
+    }
+    if (width <= 640) {
+      await page.getByRole('button', { name: '返回對話列表' }).click()
+      await expect
+        .element(page.getByRole('region', { name: '對話列表' }))
+        .toBeVisible()
+      expect(element('.customer-chat-workspace').getClientRects()).toHaveLength(
+        0
+      )
+      noOverflow()
+    }
+    if (width <= 820) {
+      await page.getByRole('button', { name: '開啟導覽選單' }).click()
+      expect(element('.sidebar').classList.contains('is-open')).toBe(true)
+      expect(rect('.sidebar').left).toBe(0)
+      noOverflow()
+    }
+  }
+)
