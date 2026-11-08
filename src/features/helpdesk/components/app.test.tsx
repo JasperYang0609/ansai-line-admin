@@ -241,8 +241,15 @@ it('正式查閱顯示歷史範圍並隱藏接手、恢復和發送', async () =
   await page.getByRole('button', { name: '登入工作台' }).click()
   await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
   await expect
-    .element(page.getByRole('note'))
-    .toHaveTextContent('部分舊訊息、AI 回覆與真人回覆可能未保存')
+    .element(page.getByText('歷史紀錄說明', { exact: true }))
+    .toBeVisible()
+  await expect
+    .element(page.getByText('已保存的正文長期保留', { exact: false }))
+    .not.toBeVisible()
+  await page.getByText('歷史紀錄說明', { exact: true }).click()
+  await expect
+    .element(page.getByText('已保存的正文長期保留', { exact: false }))
+    .toBeVisible()
   await expect
     .element(page.getByRole('button', { name: '接手對話' }))
     .not.toBeInTheDocument()
@@ -475,7 +482,7 @@ describe('正式工作台名稱與操作說明', () => {
     await page.getByRole('button', { name: '登入工作台' }).click()
     await expect
       .element(page.getByText('正式紀錄 · 唯讀', { exact: true }))
-      .toBeVisible()
+      .not.toBeInTheDocument()
     await page.getByRole('button', { name: /示範顧客：林同學/ }).click()
     await expect
       .element(page.getByRole('button', { name: '接手對話', exact: true }))
@@ -552,7 +559,7 @@ describe('事件通知自動更新', () => {
     fixture.notify()
     await expect
       .element(page.getByText('正式紀錄 · 唯讀', { exact: true }))
-      .toBeVisible()
+      .not.toBeInTheDocument()
     await expect
       .element(page.getByRole('textbox', { name: /回覆訊息/ }))
       .not.toBeInTheDocument()
