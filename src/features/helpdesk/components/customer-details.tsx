@@ -11,12 +11,14 @@ const statusOf = (error: unknown) =>
 export function CustomerDetailsPanel({
   api,
   conversationId,
+  customerName,
   guardRef,
   onSaved,
   onUnauthorized,
 }: {
   api: HelpdeskApi
   conversationId: string
+  customerName: string
   guardRef: React.RefObject<CustomerGuard>
   onSaved: (details: CustomerDetails) => void
   onUnauthorized: (error: unknown) => void
@@ -158,9 +160,8 @@ export function CustomerDetailsPanel({
       aria-busy={loading || saving}
     >
       <h2>客戶內部資料</h2>
-      <p className='customer-notice'>
-        AI 預設會讀取記事與標籤作為此客戶的回覆參考；不會直接傳送至
-        LINE，也不會同步至 LINE 官方帳號標籤。請勿填入密碼等秘密。
+      <p className='customer-name' aria-label='客戶暱稱'>
+        {customerName.trim() || '未取得暱稱'}
       </p>
       {api.mode === 'demo' && (
         <p className='customer-notice'>

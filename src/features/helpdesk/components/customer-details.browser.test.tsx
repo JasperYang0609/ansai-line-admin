@@ -5,6 +5,7 @@ import { ApiError, createDemoApi } from '../api'
 import { HelpdeskApp } from '../app'
 import '../app.css'
 import type { CustomerDetails } from '../types'
+import { CustomerDetailsPanel } from './customer-details'
 
 const note = () => page.getByRole('textbox', { name: '內部記事' })
 const save = () => page.getByRole('button', { name: '儲存客戶資料' })
@@ -21,12 +22,15 @@ afterEach(async () => {
   await page.viewport(1280, 800)
 })
 describe('客戶內部資料', () => {
-  it('儲存、更新人、標籤增刪去重、搜尋與AI提示', async () => {
+  it('儲存、更新人、標籤增刪去重、搜尋與客戶暱稱', async () => {
     const api = await open()
     const spy = vi.spyOn(api, 'updateCustomer')
+    expect(document.querySelector('.customer-name')?.textContent).toBe(
+      '示範顧客：林同學'
+    )
     await expect
       .element(page.getByText(/AI 預設會讀取記事與標籤/))
-      .toBeVisible()
+      .not.toBeInTheDocument()
     await note().fill('偏好週末上課')
     await page.getByRole('textbox', { name: '新增標籤' }).fill(' VIP ')
     await page.getByRole('button', { name: '加入標籤' }).click()
@@ -319,6 +323,40 @@ describe('客戶內部資料', () => {
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
       const panel = document.querySelector('.customer-details')!
       expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth)
+    }
+  )
+})
+
+describe('客戶暱稱顯示', () => {
+  it('切換對話會切換右側客戶暱稱', async () => {
+    await open()
+    expect(document.querySelector('.customer-name')?.textContent).toBe(
+      '示範顧客：林同學'
+    )
+    await page.getByRole('button', { name: /示範顧客：陳同學/ }).click()
+    expect(document.querySelector('.customer-name')?.textContent).toBe(
+      '示範顧客：陳同學'
+    )
+  })
+  it.each(['   ', '<img src=x onerror=alert(1)><script>alert(1)</script>'])(
+    '空暱稱或HTML暱稱安全顯示：%s',
+    async (name) => {
+      await render(
+        <CustomerDetailsPanel
+          api={createDemoApi()}
+          conversationId='demo-1'
+          customerName={name}
+          guardRef={{ current: { dirty: false, saving: false } }}
+          onSaved={() => {}}
+          onUnauthorized={() => {}}
+        />
+      )
+      expect(document.querySelector('.customer-name')?.textContent).toBe(
+        name.trim() || '未取得暱稱'
+      )
+      expect(
+        document.querySelector('.customer-name img, .customer-name script')
+      ).toBeNull()
     }
   )
 })
