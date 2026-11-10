@@ -24,7 +24,16 @@ const recordSchema = z.object({
   eventId: z.string(),
   start: z.string(),
   end: z.string(),
-  status: z.enum(['offered', 'writing', 'unknown', 'confirmed', 'unavailable']),
+  status: z.enum([
+    'offered',
+    'writing',
+    'unknown',
+    'confirmed',
+    'unavailable',
+    'cancelled',
+  ]),
+  syncStatus: z.enum(['ok', 'conflict', 'error']).nullable().optional(),
+  syncedAt: z.string().nullable().optional(),
   service: z.string(),
   timeZone: z.string(),
 })
@@ -118,6 +127,45 @@ export function createCalendarApi(
         )
       )
     },
+    async counts(startDate: string, endDate: string) {
+      const date = /^\d{4}-\d{2}-\d{2}$/
+      if (!date.test(startDate) || !date.test(endDate) || startDate > endDate)
+        throw Error('預約統計日期無效。')
+      const result = checked(
+        z.object({
+          counts: z.array(
+            z.object({
+              date: z.string().regex(date),
+              count: z.number().int().nonnegative(),
+            })
+          ),
+        }),
+        await call(
+          '/calendar/booking-counts?' +
+            new URLSearchParams({ startDate, endDate })
+        )
+      )
+      const seen = new Set<string>()
+      for (const row of result.counts) {
+        if (row.date < startDate || row.date > endDate || seen.has(row.date))
+          throw Error('預約統計回應不完整，請核對後端版本。')
+        seen.add(row.date)
+      }
+      return result
+    },
+    async sync() {
+      return checked(
+        z.object({
+          checked: z.number().int().nonnegative(),
+          updated: z.number().int().nonnegative(),
+          cancelled: z.number().int().nonnegative(),
+          conflicts: z.number().int().nonnegative(),
+          failed: z.number().int().nonnegative(),
+          remaining: z.number().int().nonnegative(),
+        }),
+        await call('/calendar/sync', { method: 'POST' })
+      )
+    },
     async pause() {
       return checked(
         z.object({ enabled: z.literal(false) }),
@@ -134,6 +182,7 @@ export function createCalendarApi(
             'unknown',
             'confirmed',
             'unavailable',
+            'cancelled',
           ]),
         }),
         await call('/calendar/bookings/' + id + '/reconcile', {

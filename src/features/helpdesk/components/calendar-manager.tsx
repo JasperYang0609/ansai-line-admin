@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   CalendarApi,
   CalendarSettings,
@@ -16,6 +16,7 @@ const labels = {
   unknown: '結果待核對，請勿重送',
   confirmed: '預約完成',
   unavailable: '時段無法安排',
+  cancelled: '已取消（Google 日曆）',
 }
 export function CalendarManager({
   api,
@@ -24,6 +25,8 @@ export function CalendarManager({
   api: CalendarApi
   onRecords: (rows: BookingRecord[] | null) => void
 }) {
+  const loadVersion = useRef(Symbol())
+  const [syncNotice, setSyncNotice] = useState('')
   const [records, setRecords] = useState<BookingRecord[]>([])
   const [next, setNext] = useState<{ createdAt: string; id: string } | null>(
     null
@@ -54,50 +57,90 @@ export function CalendarManager({
     enabled: false,
     version: 0,
   })
-  async function load() {
+  async function load(synchronize = false) {
+    const version = Symbol()
+    loadVersion.current = version
     setBusy(true)
     setError('')
+    setSyncNotice('')
     try {
+      const sync = synchronize ? await api.sync() : null
       const s = await api.status()
+      if (version !== loadVersion.current) return
       setStatus(s)
       const [a, b] = await Promise.all([api.settings(), api.bookings()])
+      if (version !== loadVersion.current) return
       if (a.settings) setSettings(a.settings)
       setRecords(b.bookings)
       setNext(b.next ?? null)
       onRecords(b.bookings)
-      if (s.state === 'connected' && s.isOwner)
-        setCalendars((await api.calendars()).calendars)
+      if (s.state === 'connected' && s.isOwner) {
+        const c = await api.calendars()
+        if (version !== loadVersion.current) return
+        setCalendars(c.calendars)
+      }
+      if (sync) {
+        if (sync.failed || sync.conflicts || sync.remaining) {
+          setError(
+            'Google 同步尚未全部完成：' +
+              (sync.failed ? sync.failed + ' 筆讀取失敗；' : '') +
+              (sync.conflicts
+                ? sync.conflicts + ' 筆時段衝突待人工核對；'
+                : '') +
+              (sync.remaining ? '仍有紀錄等待後續同步；' : '') +
+              '已顯示目前保存的紀錄，不能視為全部最新。'
+          )
+        } else {
+          setSyncNotice(
+            '本批 Google 同步完成：核對 ' +
+              sync.checked +
+              ' 筆，更新 ' +
+              sync.updated +
+              ' 筆，取消 ' +
+              sync.cancelled +
+              ' 筆。'
+          )
+        }
+      }
     } catch {
-      setError('日曆資料尚未讀取成功，請確認登入權限、後端版本與日曆設定。')
+      if (version !== loadVersion.current) return
+      setError(
+        synchronize
+          ? 'Google 同步未完成，請確認授權、日曆權限與後端版本；原紀錄保留，不代表沒有預約。'
+          : '日曆資料尚未讀取成功，請確認登入權限、後端版本與日曆設定。'
+      )
       onRecords(null)
     } finally {
-      setBusy(false)
+      if (version === loadVersion.current) setBusy(false)
     }
   }
   useEffect(() => {
     let live = true
+    const version = Symbol()
+    loadVersion.current = version
     void api
       .status()
       .then(async (s) => {
-        if (!live) return
+        if (!live || version !== loadVersion.current) return
         setStatus(s)
         const [a, b] = await Promise.all([api.settings(), api.bookings()])
-        if (!live) return
+        if (!live || version !== loadVersion.current) return
         if (a.settings) setSettings(a.settings)
         setRecords(b.bookings)
         setNext(b.next ?? null)
         onRecords(b.bookings)
         if (s.state === 'connected' && s.isOwner) {
           const c = await api.calendars()
-          if (live) setCalendars(c.calendars)
+          if (live && version === loadVersion.current) setCalendars(c.calendars)
         }
       })
       .catch(() => {
-        if (live)
+        if (live && version === loadVersion.current)
           setError('日曆資料尚未讀取成功，請確認登入權限、後端版本與日曆設定。')
       })
     return () => {
       live = false
+      loadVersion.current = Symbol()
     }
   }, [api, onRecords])
   async function older() {
@@ -148,6 +191,7 @@ export function CalendarManager({
       <p role='status'>{status ? states[status.state] : '日曆狀態尚未讀取'}</p>
       {error && <p role='alert'>{error}</p>}
       {saved && <p role='status'>{saved}</p>}
+      {syncNotice && <p role='status'>{syncNotice}</p>}
       <div className='booking-month-actions'>
         <button
           className='primary-button'
@@ -159,9 +203,9 @@ export function CalendarManager({
         <button
           className='small-button'
           disabled={busy}
-          onClick={() => void load()}
+          onClick={() => void load(true)}
         >
-          重新讀取日曆
+          同步 Google 並重新整理
         </button>
       </div>
       {records
@@ -363,7 +407,10 @@ export function CalendarManager({
         </form>
       )}
       <p className='surface-note'>
-        預約以客戶確認、後端重查及建立成功為準。結果待核對時不要重送；改期與取消先由真人客服核對原紀錄。
+        預約以客戶確認、後端重查及建立成功為準。Google
+        手動刪除或改期須同步後才會反映；重新整理會向 Google
+        核對，不只是重讀舊紀錄。結果待核對時不要重送；AI
+        自動改期與取消尚未提供。
       </p>
     </div>
   )
@@ -386,6 +433,14 @@ export function BookingRows({ rows }: { rows: BookingRecord[] }) {
               （{r.timeZone}）
             </p>
             <p>{labels[r.status]}</p>
+            {r.syncStatus === 'conflict' && (
+              <p role='alert'>Google 改期後有時段衝突，請由真人核對。</p>
+            )}
+            {r.syncStatus === 'error' && (
+              <p role='alert'>
+                Google 同步異常，顯示上次保存資料，請核對授權與日曆。
+              </p>
+            )}
           </article>
         ))
       )}

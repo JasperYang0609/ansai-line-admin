@@ -50,3 +50,66 @@ it('較早預約使用後端分頁，不把第一頁當成全部歷史', async (
       new URLSearchParams({ beforeAt: cursor.createdAt, beforeId: cursor.id })
   )
 })
+
+it('完整日統計查詢不帶租戶身分，也不從第一頁自行計算', async () => {
+  const call = vi.fn(async () => ({
+    counts: [{ date: '2026-11-11', count: 205 }],
+  }))
+  expect(
+    await createCalendarApi(call).counts('2026-11-01', '2026-12-12')
+  ).toEqual({ counts: [{ date: '2026-11-11', count: 205 }] })
+  expect(call).toHaveBeenCalledWith(
+    '/calendar/booking-counts?startDate=2026-11-01&endDate=2026-12-12'
+  )
+})
+it('不接受重複日期、負筆數、範圍外或截斷形狀的統計回應', async () => {
+  for (const response of [
+    { counts: [{ date: '2026-11-11', count: -1 }] },
+    {
+      counts: [
+        { date: '2026-11-11', count: 1 },
+        { date: '2026-11-11', count: 1 },
+      ],
+    },
+    { counts: [{ date: '2026-12-13', count: 1 }] },
+    { bookings: [] },
+  ]) {
+    await expect(
+      createCalendarApi(async () => response).counts('2026-11-01', '2026-12-12')
+    ).rejects.toThrow()
+  }
+})
+it('同步使用受控 POST 並驗證完整批次結果', async () => {
+  const response = {
+    checked: 2,
+    updated: 1,
+    cancelled: 1,
+    conflicts: 0,
+    failed: 0,
+    remaining: 0,
+  }
+  const call = vi.fn(async () => response)
+  expect(await createCalendarApi(call).sync()).toEqual(response)
+  expect(call).toHaveBeenCalledWith('/calendar/sync', { method: 'POST' })
+  await expect(
+    createCalendarApi(async () => ({ success: true })).sync()
+  ).rejects.toThrow()
+})
+it('取消與同步異常保留為明確狀態，未知欄位不外洩', async () => {
+  const row = {
+    id: 'synthetic',
+    conversationId: 'synthetic',
+    eventId: 'synthetic',
+    start: '2026-11-11T02:00:00Z',
+    end: '2026-11-11T03:00:00Z',
+    status: 'cancelled',
+    service: '合成服務',
+    timeZone: 'Asia/Taipei',
+    syncStatus: 'ok',
+    syncedAt: null,
+  }
+  const api = createCalendarApi(async () => ({
+    bookings: [{ ...row, privateEnvelope: '不可帶出' }],
+  }))
+  expect((await api.bookings()).bookings).toEqual([row])
+})

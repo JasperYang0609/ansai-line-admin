@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Link2 } from 'lucide-react'
 import type { CalendarApi, BookingRecord } from '../calendar-client'
 import './booking-calendar.css'
@@ -15,6 +15,12 @@ const monthLabel = (date: Date) =>
   new Intl.DateTimeFormat('zh-TW', { year: 'numeric', month: 'long' }).format(
     date
   )
+const dateKey = (date: Date) =>
+  [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -25,6 +31,11 @@ export function BookingCalendarPage({
   calendar,
 }: { calendar?: CalendarApi } = {}) {
   const [bookings, setBookings] = useState<BookingRecord[] | null>(null)
+  const [dayCounts, setDayCounts] = useState<{
+    key: string
+    records: BookingRecord[]
+    counts: Record<string, number> | null
+  } | null>(null)
   const [selected, setSelected] = useState(() => new Date())
   const [month, setMonth] = useState(() => new Date())
   const today = new Date()
@@ -39,6 +50,38 @@ export function BookingCalendarPage({
         12
       )
   )
+  const rangeStart = dateKey(dates[0])
+  const rangeEnd = dateKey(dates[41])
+  const rangeKey = rangeStart + '/' + rangeEnd
+  const currentCounts =
+    bookings !== null &&
+    dayCounts?.key === rangeKey &&
+    dayCounts.records === bookings
+      ? dayCounts
+      : null
+  useEffect(() => {
+    if (!calendar || bookings === null) return
+    let live = true
+    void calendar
+      .counts(rangeStart, rangeEnd)
+      .then((result) => {
+        if (live)
+          setDayCounts({
+            key: rangeKey,
+            records: bookings,
+            counts: Object.fromEntries(
+              result.counts.map((row) => [row.date, row.count])
+            ),
+          })
+      })
+      .catch(() => {
+        if (live)
+          setDayCounts({ key: rangeKey, records: bookings, counts: null })
+      })
+    return () => {
+      live = false
+    }
+  }, [calendar, bookings, rangeStart, rangeEnd, rangeKey])
   function changeMonth(offset: number) {
     setMonth(new Date(month.getFullYear(), month.getMonth() + offset, 1, 12))
   }
@@ -106,7 +149,21 @@ export function BookingCalendarPage({
               </button>
             </div>
           </div>
-          <p className='surface-note'>僅供日期瀏覽，不代表可預約時段。</p>
+          <p className='surface-note'>
+            {calendar
+              ? '日期下方顯示已確認預約筆數（不含已取消與待確認），不代表可預約空檔。'
+              : '僅供日期瀏覽，不代表可預約時段。'}
+          </p>
+          {calendar && !currentCounts && (
+            <p className='surface-note' role='status'>
+              預約筆數尚未載入，空白不代表零筆。
+            </p>
+          )}
+          {calendar && currentCounts?.counts === null && (
+            <p role='alert'>
+              預約筆數讀取失敗，請同步並重新整理；不以部分紀錄估算總數。
+            </p>
+          )}
           <table
             className='booking-grid'
             aria-label={monthLabel(month) + '日期瀏覽'}
@@ -132,12 +189,27 @@ export function BookingCalendarPage({
                             ? ' booking-outside'
                             : '')
                         }
-                        aria-label={dateLabel(date)}
+                        aria-label={
+                          dateLabel(date) +
+                          (currentCounts?.counts
+                            ? '，' +
+                              (currentCounts.counts[dateKey(date)] ?? 0) +
+                              ' 筆預約'
+                            : '')
+                        }
                         aria-pressed={sameDay(date, selected)}
                         aria-current={sameDay(date, today) ? 'date' : undefined}
                         onClick={() => selectDate(date)}
                       >
-                        {date.getDate()}
+                        <span>{date.getDate()}</span>
+                        {(currentCounts?.counts?.[dateKey(date)] ?? 0) > 0 && (
+                          <span
+                            className='booking-day-count'
+                            aria-hidden='true'
+                          >
+                            {currentCounts!.counts![dateKey(date)]}
+                          </span>
+                        )}
                       </button>
                     </td>
                   ))}
@@ -147,7 +219,7 @@ export function BookingCalendarPage({
           </table>
           <p className='surface-note booking-timezone'>
             {calendar
-              ? '日期格供瀏覽；每筆預約均標示店家的預約時區。'
+              ? '筆數依每筆預約保存的店家時區歸日，不受此裝置時區影響；同步失敗時仍可能是舊紀錄。'
               : '日期依此裝置時區顯示；預約時區尚未設定。'}
           </p>
         </div>
