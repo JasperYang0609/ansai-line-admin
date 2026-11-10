@@ -13,3 +13,7 @@
 - 保留 LICENSE、NOTICE 與上游 MIT 聲明。
 - 前端功能在 src/features/helpdesk；上游其他 routes/features 只是參考，不是本應用入口。三套主題只控制外觀，不改 API／身分／對話狀態。
 - 改動後執行受影響測試及必要 lint/typecheck/build；新安裝須有 setup 結果，發布須有 exact commit 的 CI 與回讀。未實際驗證的功能明確標記未驗，不能以 demo 代替 live 驗收。
+
+- Google Calendar 採學員自有 GCP／OAuth，由本人 AI 桌面工具依 INSTALL.md「Google 行事曆：學員自有專案與七天失效防呆」引導。先核實預約後端能力；目前公版只有預約行事曆 UI，未提供預約後端，不捏造 callback／設定鍵。Testing 的 Calendar refresh token 有七天限制，正式發布後重新授權並驗證 refresh；個人自用不等於自動免此期限，也不保證永久有效。不得把當日驗證當成第八天實測，不將公司或其他學員的秘密帶入公版。
+
+- 預約行事曆後續串接先讀 docs/booking-calendar-handoff.md；已完成側欄入口與唯讀日期瀏覽，禁用的 Google 連接不能只解除 disabled 就視為功能完成。
