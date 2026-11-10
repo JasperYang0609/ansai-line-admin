@@ -129,6 +129,61 @@ Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權
 
 官方設定依據（2026-11-07 核對）：[Build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/)、[Build image 與版本覆寫](https://developers.cloudflare.com/pages/configuration/build-image/)、[SPA serving](https://developers.cloudflare.com/pages/configuration/serving-pages/)。
 
+## Google 行事曆：學員自有專案與七天失效防呆
+
+### 目前狀態與課程方向（2026-11-10）
+
+採用「公版程式＋設定指南，由學員自己的 AI 桌面工具協助安裝」。每位學員使用自己的 Google Cloud 專案、OAuth 應用及公司日曆；不共用維護者的 OAuth secret、配額或日曆憑證，不要求訂閱第三方預約平台，也不預設建立中央代管服務。沿用 Cloudflare Pages 前端與學員既有 Supabase 後端。
+
+**本節是設定與驗收指南，不代表預約功能已完成。** 此版本公版尚未提供可執行的 Calendar OAuth callback、token refresh、查空檔或建立／改期／取消預約模組；既有登入與客戶記事不是日曆連接。先確認所安裝版本及相容後端實際具備這些能力，缺項先回報「預約模組待實作」，停止日曆接線，不要求學員找不存在的 callback URL、不捏造環境變數／API 或假按鈕。現有客服安裝不因此被阻擋。
+
+### 給學員的 AI 桌面工具
+
+> 請先完整讀取 INSTALL.md 與 AGENTS.md，檢查目前版本及我指定的 Supabase 後端是否具備 Google Calendar 預約功能。沒有就列缺項，不自行發明 callback URL。若已具備，依本節引導我設定自己的 Google Cloud／OAuth；登入、MFA、同意授權與正式發布由我確認，秘密只填入本機受保護輸入或伺服器端秘密儲存，不貼在對話、截圖或 Git。確認 OAuth 是 In production，而非 Testing；若曾在 Testing 授權，正式發布後重新連接並確認後端保存有效的 refresh token。完成後分別回報設定、refresh、實際日曆與第八天驗證的證據；未驗不得勾選。
+
+AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refresh 應由已部署的 Supabase 後端處理；不能要求學員保持桌面 AI、瀏覽器或自己的電腦一直開著。工具不具備瀏覽器／雲端操作能力時，提供對應人工步驟，不宣稱全自動。
+
+### 先分清三件事
+
+- **Testing（測試）**：External 類型的 OAuth 應用若請求 Calendar 權限，Google 發出的 refresh token 會有七天期限；只有基本登入身分 scopes 的例外不適用 Calendar。只加自己為 test user 並不能解決。
+- **In production（正式發布）**：不再適用上述 Testing 固定七天期限；不是把日曆公開，也不是將 GCP 管理權分享出去。正式發布後要核對畫面狀態，不能只看到「已連接」就放行。
+- **應用驗證（verification）**：與發布狀態不同。官方對僅本人或少數本人認識的使用者有 personal-use 例外，但仍有未驗證警告及使用人數限制；不得保證所有商業／企業情境免審。此路線只授權學員自己控制的日曆；LINE 客戶提出預約不等於授權自己的 Google 帳號。若改成讓不特定其他 Google 使用者授權、跨公司共用應用，重新核對驗證要求，不以拆專案／分帳號規避審核。公司 Workspace 政策可能需要管理員同意，不能以改私人帳號繞過政策。
+
+### 設定順序：先正式發布，再完成長期授權
+
+僅在相容預約後端已存在、學員明確核准目標帳號／專案與相關設定後執行；以下介面名稱可能隨 Google 更新，依官方文件和當前畫面核對。
+
+1. 確認學員自有 Google Cloud 專案；已有合適專案就沿用，不重建或切換無關專案。啟用 Google Calendar API；不因本教學自動啟用付費服務、綁卡或申請無關 API。
+2. 在 Google Auth Platform 的 Branding／Audience／Data Access 設定應用名稱、聯絡資訊與實際需要的 scopes。個人 Gmail 常用 External；Internal 只適用符合資格的 Workspace 組織，不是假裝個人自用的選項。只申請所需日曆讀寫／忙碌資訊權限，不順便加入 Gmail、Drive 或全 GCP 管理權限；精確 scope 清單以已實作後端為準。
+3. 在 Clients 建立符合後端流程的 **Web application** OAuth client。即使用桌面 AI 幫忙操作，也不是因此選 Desktop app。將後端實際提供的 HTTPS callback URL 精確填入 Authorized redirect URIs；scheme、host、path 及尾斜線都需一致。不得把 Pages 首頁、LINE Webhook 或不相關的 Supabase Auth callback 當成 Calendar callback；只有實作明確如此設計才使用它。
+4. 將 client secret 安全配置在該學員後端；refresh token 加密保存且不得讓前端讀取。client ID 不是秘密，但不代表 client secret 可公開。任何 secret、authorization code、access／refresh token 均不得放入 VITE_、瀏覽器持久儲存、Git、log、聊天或教學截圖。不新增此版本不存在的設定鍵名稱。
+5. 在 Audience 找到 Publishing status，依介面執行 Publish app，確認顯示 **In production**，再進行長期連接。發布、驗證或管理員政策有阻擋時，回報具體原因；不得留在 Testing 卻標記已排除七天期限。Personal-use 未驗證警告只可在本人核對確為自有應用及所需權限後由本人決定，不教學員一律忽略所有安全警告。
+6. 透過實際日曆連接流程，以學員自己的帳號授權目標日曆。伺服器端流程須請求 offline access，校驗一次性 state 與登入者綁定，安全交換授權碼，並保存 refresh token；若沒有 refresh token，不能只憑當下 access token 可用就通過。access token 的短效到期應由後端自動 refresh，不需要每次請學員登入。
+7. **曾在 Testing 授權者：切到正式發布後重新授權。** 不假設舊 token 會自動延長。使用該應用受控的「重新連接」流程，必要時要求重新 consent；確認新 token 已安全保存且 refresh 成功，Google 若未回傳新 refresh token，不得用空值蓋掉既有值，也不得將更新 access token 誤稱重取了長期授權。若仍無法取得需要的授權，由學員確認後才撤銷這一個應用並重連；先說明撤銷可能中斷同應用其他連線，不撤銷無關應用。授權失效期間停止新預約，保留原行程與待核對紀錄，不批次補送。
+8. 選定具寫入權限的目標日曆，設定時區、營業時間、服務時長及排除日期。沿用最小必要權限，不改用 service account 或全網域委派來規避個別授權。
+
+### 課堂驗收：不是登入成功就算完成
+
+以下是未來模組的必要驗收項目，**本次文件更新未實作或執行這些測試**。驗收只用學員指定的測試日曆與虛構測試資料，不讀取無關私人事件、不寄送真實客戶邀請。
+
+- [ ] 記錄版本 commit、目標專案／OAuth client 的非秘密識別、發布狀態及授權日期；Publishing status 已回讀為 In production。證據去除私人資料與任何 token。
+- [ ] 後端確實持有 refresh token 並成功取得新的 access token；後端程序重啟後仍能取回授權。不能只測前端顯示「已連接」。
+- [ ] 在短效 access token 到期後（或受控測試強制走 refresh 路徑），仍能無人工登入查詢授權日曆；此為當日 refresh 驗證，不等於已通過七天長期驗證。
+- [ ] 經同意才建立一筆測試事件，回讀正確日曆、時區與 event ID；驗證重複請求不多建事件、衝突不假成功。清理只刪該筆已確認的測試事件。結果不確定時先查核，不能換 ID 盲目重送。
+- [ ] 用模擬 invalid_grant／撤銷案例驗證「請重新連接 Google」及人工接手；預約不得假成功，不能無限重試。401、403、429 與網路逾時分開處理，不全部當成七天到期。
+- [ ] 確認錯誤訊息及日誌無 secret／token／授權碼，非授權帳號不能存取他人憑證或預約。
+- [ ] **授權滿八天後**，由學員或課程助教再做一次唯讀日曆／refresh 驗證並記錄日期。未到期只能標「當日通過，第八天待驗」，不可改系統時間冒充實測；本文件不會自動建立提醒、排程或背景測試。
+
+### 客訴與恢復說明
+
+- 第七天附近斷線：先檢查 OAuth client 是否對應正確專案、Publishing status 及 token 是否是在 Testing 時取得；依上面的正式發布／重新授權步驟處理。不要要求每七天重登作為正常使用方式。
+- invalid_grant：可能是撤銷授權、舊 token、長期未使用或帳號政策等，並非一律七天到期。通知擁有者重新連接；保留既有預約，重新查核 pending／unknown 結果後再繼續，不刪日曆、不假成功。
+- 無 refresh token：查 offline access、既有 consent 與安全保存流程；不要用定期開瀏覽器登入代替修正後端。
+- redirect_uri_mismatch／管理員封鎖／日曆權限不足：分別修正精確 callback、請組織管理員核准、確認目標日曆寫入權；不是反覆登入就會解決。
+- In production 消除的是 **Testing 的固定七天限制**，不是永久授權保證。Google 仍可能因撤銷、refresh token 六個月未使用、token 數量限制、限時同意或組織政策使授權失效。不得承諾「永不掉線／完全零客訴」。
+
+官方依據（2026-11-10 核對）：[OAuth token 到期與撤銷](https://developers.google.com/identity/protocols/oauth2)、[Personal use 與驗證例外](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)、[Web server OAuth／offline access](https://developers.google.com/identity/protocols/oauth2/web-server)、[Calendar scopes](https://developers.google.com/workspace/calendar/api/auth)。
+
 ## 完成回報
 
 回報來源 repo、完整 commit、Node／pnpm 版本、setup／build 結果、實際本機網址與畫面驗證是否完成。區分 build、Auth／管理 API 連線與 LINE 發送各自的驗證結果；未驗不得宣稱已串 LINE；不要回報密碼、token、環境檔內容或顧客訊息。
