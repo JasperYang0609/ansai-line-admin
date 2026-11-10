@@ -135,7 +135,7 @@ Cloudflare 只提供這裡的前端託管；不會因此自動取得員工授權
 
 採用「公版程式＋設定指南，由學員自己的 AI 桌面工具協助安裝」。每位學員使用自己的 Google Cloud 專案、OAuth 應用及公司日曆；不共用維護者的 OAuth secret、配額或日曆憑證，不要求訂閱第三方預約平台，也不預設建立中央代管服務。沿用 Cloudflare Pages 前端與學員既有 Supabase 後端。
 
-**本節是設定與驗收指南，不代表預約功能已完成。** 此版本公版尚未提供可執行的 Calendar OAuth callback、token refresh、查空檔或建立／改期／取消預約模組；既有登入與客戶記事不是日曆連接。先確認所安裝版本及相容後端實際具備這些能力，缺項先回報「預約模組待實作」，停止日曆接線，不要求學員找不存在的 callback URL、不捏造環境變數／API 或假按鈕。現有客服安裝不因此被阻擋。
+**左側「預約行事曆」已提供月曆瀏覽與未串接狀態，但預約後端尚未完成。** 前端接手範圍見 [Calendar 串接交接](docs/booking-calendar-handoff.md)。本節是設定與驗收指南，不代表已能預約。 此版本公版尚未提供可執行的 Calendar OAuth callback、token refresh、查空檔或建立／改期／取消預約模組；既有登入與客戶記事不是日曆連接。先確認所安裝版本及相容後端實際具備這些能力，缺項先回報「預約模組待實作」，停止日曆接線，不要求學員找不存在的 callback URL、不捏造環境變數／API 或假按鈕。現有客服安裝不因此被阻擋。
 
 ### 給學員的 AI 桌面工具
 
@@ -156,7 +156,7 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 1. 確認學員自有 Google Cloud 專案；已有合適專案就沿用，不重建或切換無關專案。啟用 Google Calendar API；不因本教學自動啟用付費服務、綁卡或申請無關 API。
 2. 在 Google Auth Platform 的 Branding／Audience／Data Access 設定應用名稱、聯絡資訊與實際需要的 scopes。個人 Gmail 常用 External；Internal 只適用符合資格的 Workspace 組織，不是假裝個人自用的選項。只申請所需日曆讀寫／忙碌資訊權限，不順便加入 Gmail、Drive 或全 GCP 管理權限；精確 scope 清單以已實作後端為準。
 3. 在 Clients 建立符合後端流程的 **Web application** OAuth client。即使用桌面 AI 幫忙操作，也不是因此選 Desktop app。將後端實際提供的 HTTPS callback URL 精確填入 Authorized redirect URIs；scheme、host、path 及尾斜線都需一致。不得把 Pages 首頁、LINE Webhook 或不相關的 Supabase Auth callback 當成 Calendar callback；只有實作明確如此設計才使用它。
-4. 將 client secret 安全配置在該學員後端；refresh token 加密保存且不得讓前端讀取。client ID 不是秘密，但不代表 client secret 可公開。任何 secret、authorization code、access／refresh token 均不得放入 VITE_、瀏覽器持久儲存、Git、log、聊天或教學截圖。不新增此版本不存在的設定鍵名稱。
+4. 將 client secret 安全配置在該學員後端；refresh token 加密保存且不得讓前端讀取。client ID 不是秘密，但不代表 client secret 可公開。任何 secret、authorization code、access／refresh token 均不得放入 VITE\_、瀏覽器持久儲存、Git、log、聊天或教學截圖。不新增此版本不存在的設定鍵名稱。
 5. 在 Audience 找到 Publishing status，依介面執行 Publish app，確認顯示 **In production**，再進行長期連接。發布、驗證或管理員政策有阻擋時，回報具體原因；不得留在 Testing 卻標記已排除七天期限。Personal-use 未驗證警告只可在本人核對確為自有應用及所需權限後由本人決定，不教學員一律忽略所有安全警告。
 6. 透過實際日曆連接流程，以學員自己的帳號授權目標日曆。伺服器端流程須請求 offline access，校驗一次性 state 與登入者綁定，安全交換授權碼，並保存 refresh token；若沒有 refresh token，不能只憑當下 access token 可用就通過。access token 的短效到期應由後端自動 refresh，不需要每次請學員登入。
 7. **曾在 Testing 授權者：切到正式發布後重新授權。** 不假設舊 token 會自動延長。使用該應用受控的「重新連接」流程，必要時要求重新 consent；確認新 token 已安全保存且 refresh 成功，Google 若未回傳新 refresh token，不得用空值蓋掉既有值，也不得將更新 access token 誤稱重取了長期授權。若仍無法取得需要的授權，由學員確認後才撤銷這一個應用並重連；先說明撤銷可能中斷同應用其他連線，不撤銷無關應用。授權失效期間停止新預約，保留原行程與待核對紀錄，不批次補送。

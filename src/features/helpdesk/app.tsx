@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   BookOpen,
+  CalendarDays,
   ChartNoAxesCombined,
   ChevronRight,
   Inbox,
@@ -11,6 +12,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react'
+import { BookingCalendarPage } from './components/booking-calendar'
 import {
   CustomerDetailsPanel,
   type CustomerGuard,
@@ -32,9 +34,10 @@ import type {
   Staff,
 } from './types'
 
-type Tab = 'inbox' | 'staff' | 'reports' | 'settings' | 'learning'
+type Tab = 'inbox' | 'booking' | 'staff' | 'reports' | 'settings' | 'learning'
 const navigation = [
   { id: 'inbox', label: '收件匣', icon: Inbox },
+  { id: 'booking', label: '預約行事曆', icon: CalendarDays },
   { id: 'staff', label: '客服成員', icon: UsersRound },
   { id: 'reports', label: '訊息概況', icon: ChartNoAxesCombined },
   { id: 'settings', label: '連線設定', icon: Settings2 },
@@ -937,6 +940,8 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                 )}
               </div>
             </>
+          ) : tab === 'booking' ? (
+            <BookingCalendarPage />
           ) : tab === 'staff' ? (
             <StaffPage staff={staff} loading={loading} />
           ) : tab === 'reports' ? (
