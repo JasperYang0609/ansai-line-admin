@@ -192,7 +192,10 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 
 ### 先準備完整文案，取得發布核准
 
-1. 核對本人 GCP 專案與帳號。沿用本人已建立的專案；不得共用講師的專案、OAuth 或參考網站。若該專案已有 Firebase Hosting，先唯讀列出 sites 並核對現有內容；為本次用途選擇新的網站，不覆蓋既有網站。若尚未加入 Firebase，先確認 Spark 免費方案與必要條款；不要綁帳單或升級，遇到付費要求停止回報。
+1. 核對本人 Google 帳號及既有 OAuth／Calendar 專案；不得共用講師的專案、OAuth 或參考網站。公開說明頁可使用另一個 Firebase 專案，不必與 OAuth 位於同一個 GCP 專案。依計費狀態分流：
+   - 既有專案未綁帳單：確認 Spark 免費方案與必要條款。若已有 Hosting，先唯讀列出 sites 並核對內容，使用新網站，不覆蓋既有網站。
+   - 既有專案已綁帳單，或加入 Firebase 時顯示將採 Blaze：**保留原計費、帳務與服務**，不要教學員解除計費。取得本人建立獨立專案的核准後，以同一個已授權帳號另建只放公開說明頁的 Firebase Spark 專案；不綁帳單、不啟用付費服務，關閉非必要的 Analytics、Gemini 與開發人員計畫。原 OAuth／Calendar 與 Supabase 不遷移、不重建。
+   - 遇到專案配額或必須付費：停止該步並回報，不自行調整原專案或帳單。
 2. 選定可用的 `SITE_ID`。本次先提出預計網址 `https://SITE_ID.web.app/`、`/privacy/`、`/terms/`，在實際建立及讀回前只能標記「預計」。首頁與政策同網域、HTTPS、免登入；不要使用共同的 `web.app` 作授權網域。
 3. 在受保護本機位置建立以下**公開資料**設定檔，替換所有欄位；不要填入任何憑證。`aiProvider` 必須列出該店家實際設定的模型供應商；營運者與聯絡信箱須由本人確認。實際資料保存、第三方、模型處理範圍不同時，先修改並核准政策，不能只換店名發布不實內容。
 
@@ -220,10 +223,10 @@ node --test scripts/calendar-site-tests.mjs
 ### 核准後才設定並發布
 
 6. 優先使用既有 Firebase 工具；若需安裝 Firebase CLI，先告知本人再安裝官方工具，不改本專案的 pnpm／lockfile。先讀 `firebase --help`、`firebase hosting:sites:list --help`、`firebase deploy --help`，再使用帶有明確本人 project 的命令。Google 登入／MFA、Firebase 條款、憑證或敏感權限由本人確認。
-7. 在本人 GCP 專案啟用 Firebase，確認 Spark 與無帳單綁定；以實際 sites 清單核對產生檔案中 `.firebaserc` 的 project 與 `firebase.json` 的 `hosting.site`。不得執行初始化指令覆寫根目錄、Pages 設定或既有 Firebase 設定；只在剛核准的新輸出資料夾執行。若 website 已有部署，停止並另選新 site。若已存在同名未完成頁面，先核對來源與使用者授權，不自動視為可覆蓋。
+7. 在上面分流選定的本人公開頁專案啟用 Firebase，回讀確認 Spark 與無帳單綁定；以實際 sites 清單核對產生檔案中 `.firebaserc` 的 project 與 `firebase.json` 的 `hosting.site`。不得執行初始化指令覆寫根目錄、Pages 設定或既有 Firebase 設定；只在剛核准的新輸出資料夾執行。若 website 已有部署，停止並另選新 site。若已存在同名未完成頁面，先核對來源與使用者授權，不自動視為可覆蓋。
 8. 使用 Firebase Hosting 的單站部署範圍 `--only hosting`，project 由已核准設定明確指定。產生的設定只包含 `public/`，沒有 Functions、資料庫、費用服務或 SPA rewrite。只發布本人核准內容，不部署整個客服後台；保留本次版本供回復。
 9. 發布後以未登入頁面分別讀回三個實際 HTTPS 網址，確認各頁內容不同、首頁連到政策、政策是全文且不是登入頁；未知路徑應為 404，不能全部回到首頁。核對實際 project、site 與發布版本。不得以本機檔案、部署命令成功或網址存在代替讀回。
-10. Google 品牌填入已驗證的首頁與政策，Authorized domains 填完整實際 `SITE_ID.web.app`。若 Google 要求網域擁有權，依 Google 正式流程完成，不以換帳號或假冒網域規避；若提供的驗證方法在無自有網域情境不可行，停止該步並回報實際畫面。
+10. 回到原本的 OAuth／Calendar 專案（不是新建公開頁專案），Google 品牌填入已驗證的首頁、政策及服務說明，Authorized domains 填完整實際 `SITE_ID.web.app`。首頁、政策及服務說明須同網域、公開免登入、HTTPS 可讀，首頁連到政策；Supabase callback 保持原後端路徑。儲存後離開並重新讀取 Branding，核對原專案、完整網址及授權網域；「已儲存草稿」不等於已通過品牌驗證或已切成 In production。若 Google 要求網域擁有權，依 Google 正式流程完成，不以換帳號或假冒網域規避；若提供的驗證方法在無自有網域情境不可行，停止該步並回報實際畫面。
 11. Web application client 只能填已完成後端提供的實際 Supabase callback，不能用靜態頁、Pages 首頁或 gog localhost callback。只申請實作需要的 Calendar scopes，先回讀 External／In production，再本人授權。正式發布不等於通過應用驗證；本人控制日曆、實際使用情境與 Google 例外條件必須逐項核對，不能只用人數少判定免審。
 12. 沿用上節 Day 0／滿八天唯讀驗收：後端持有加密 refresh token、重啟與短效憑證到期後仍能更新；曾在 Testing 授權者重新連接。Day 8 是不重登的 refresh／API 複驗，未滿八天標記待驗。真實事件僅在核准的測試日曆及次數內建立並讀回，不寄客戶邀請。
 
