@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { RealtimeClient } from '@supabase/realtime-js'
+import { createCalendarApi } from './calendar-client'
 import { customerSchema, customerUpdateSchema } from './customer'
 import type {
   Conversation,
@@ -462,6 +463,7 @@ export function createLiveApi(
   }
   return {
     mode: 'live',
+    calendar: createCalendarApi(call),
     async getCustomer(id) {
       return parse(
         customerSchema,

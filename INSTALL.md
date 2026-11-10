@@ -164,7 +164,7 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 
 ### 課堂驗收：不是登入成功就算完成
 
-以下是未來模組的必要驗收項目，**本次文件更新未實作或執行這些測試**。驗收只用學員指定的測試日曆與虛構測試資料，不讀取無關私人事件、不寄送真實客戶邀請。
+以下是正式接線的必要驗收項目。公版前端與本機合成測試完成，不等於學員的 Supabase／Google 已部署或完成真實驗收。驗收只用學員指定的測試日曆與虛構測試資料，不讀取無關私人事件、不寄送真實客戶邀請。
 
 - [ ] 記錄版本 commit、目標專案／OAuth client 的非秘密識別、發布狀態及授權日期；Publishing status 已回讀為 In production。證據去除私人資料與任何 token。
 - [ ] 後端確實持有 refresh token 並成功取得新的 access token；後端程序重啟後仍能取回授權。不能只測前端顯示「已連接」。
@@ -183,6 +183,19 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 - In production 消除的是 **Testing 的固定七天限制**，不是永久授權保證。Google 仍可能因撤銷、refresh token 六個月未使用、token 數量限制、限時同意或組織政策使授權失效。不得承諾「永不掉線／完全零客訴」。
 
 官方依據（2026-11-10 核對）：[OAuth token 到期與撤銷](https://developers.google.com/identity/protocols/oauth2)、[Personal use 與驗證例外](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)、[Web server OAuth／offline access](https://developers.google.com/identity/protocols/oauth2/web-server)、[Calendar scopes](https://developers.google.com/workspace/calendar/api/auth)。
+
+### 相容預約後端的接線順序
+
+1. 保留原客服 API base、Supabase 與員工登入。先核對後端是否實作 [預約契約](docs/backend-integration.md#google-日曆與自動預約增量)，再用原管理 API 的 `/calendar/status` 驗證。未登入、非管理者須拒絕；503／未部署不能改成假連接成功或空清單。
+2. 由本人核准後，先套用後端提供的新增式 migration，再部署相容函式。後端需一次性 state、加密憑證、自動 refresh、持久預約紀錄與跨請求鎖。公版不包含安賽私有後端，不能只啟用前端按鈕代替實作。
+3. 日曆後端的 `GOOGLE_CALENDAR_CLIENT_ID`、`GOOGLE_CALENDAR_CLIENT_SECRET`、`CALENDAR_ENCRYPTION_KEY_BASE64` 僅填在本人 Supabase 的函式秘密設定；加密金鑰與密文分離，與對話加密金鑰分開。不要寫入 `VITE_`、聊天、日誌或 Git。`LINE_CALENDAR_ENABLED` 與 `LINE_BOOKING_ENABLED` 預設 false；前者供連接／管理，後者供客戶自動預約，正式開放須分別核准。
+4. 回讀原 OAuth 專案為 External／In production，再建立或核對 Web application client。以已部署後端回讀確認的實際 `/calendar/callback` 完整 HTTPS 路徑填入 redirect URI；不是 Firebase 公開頁，也不是 Pages 首頁。只使用 Calendar 清單、事件及忙碌查詢所需權限。瀏覽器由本人授權，回呼服務端保存後回到客服後台重新登入核對，不保存 Google token 到瀏覽器。
+5. 使用管理員登入「預約行事曆」，連接 Google、選擇本人可寫入的測試日曆。明確填入服務、時區、星期、營業時間、長度、前後緩衝及資格規則，再保存。欄位未完整、載入失敗或版本衝突不能放行；預約啟用勾選預設關閉，不替學員假定營業時間。
+6. 需付款或人工資格的服務選「客服確認資格後才能預約」。管理員在該客戶的內部資料區核對實際訂單、付款或資格後，點「確認資格並允許預約」。這不是付款紀錄，也不代表已建立行程；設定版本變更後須重新核對。只有確實不需其他資格的服務才由本人選擇開放模式。
+7. LINE 客戶提出預約日期與時間，後端查詢後回覆服務、時區、長度及一次性確認碼。客戶回覆「確認預約 確認碼」後再重查及受控建立，保存成功才回覆完成。支援明確年月日時分，以及今天／明天／後天搭配數字時刻；其他模糊描述先請客戶補充，不由模型猜時間。每輪確認碼十分鐘內有效。
+8. 結果待核對時，不重送、不更換 event ID。管理員可在預約頁點「只核對原行程」，只查同一筆 Google 事件；找不到時保留鎖定與錯誤。預約歷史分頁讀取，不因超過三十天或第一頁筆數而清空。改期與取消目前交真人核對原預約處理，不宣稱自動改期／取消已串好。
+9. 依下方 Day 0／Day 8 項目驗收。真人接手前已開始的 Google 請求可能仍完成：保存結果但停止 AI 搶答，客服先核對既有紀錄；不能把外部請求當作能即時撤回。後端可避免本系統內部撞期，Google 日曆人工或其他應用在最後查詢後同時編輯仍有競態，不能宣稱跨所有外部系統的絕對鎖定。
+10. 回退時先停用客戶預約與新的授權設定操作，保留資料表、密文、固定 event ID 與 writing／unknown／confirmed 狀態，再還原相容應用版本。不要刪 migration、清空預約、解鎖未知結果或重跑收訊佇列。正式測試事件、發送次數、預算與回復點須在本人核准清單內。
 
 ## 無網域小店家的公開頁面：Firebase Hosting
 

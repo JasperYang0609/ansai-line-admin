@@ -1,3 +1,5 @@
+import type { CalendarApi } from './calendar-client'
+
 export type Staff = {
   id: string
   name: string
@@ -46,6 +48,8 @@ export type CustomerUpdate = Pick<CustomerDetails, 'note' | 'tags'> & {
   expectedVersion: number
 }
 export interface HelpdeskApi {
+  calendar?: CalendarApi
+
   getCustomer(conversationId: string): Promise<CustomerDetails>
   updateCustomer(
     conversationId: string,

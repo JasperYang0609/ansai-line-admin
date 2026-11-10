@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Link2 } from 'lucide-react'
+import type { CalendarApi, BookingRecord } from '../calendar-client'
 import './booking-calendar.css'
+import { CalendarManager, BookingRows } from './calendar-manager'
 
 const dateLabel = (date: Date) =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -18,8 +20,11 @@ const sameDay = (a: Date, b: Date) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate()
 
-/** Presentation only: no OAuth, booking API, persistence or sample appointments. */
-export function BookingCalendarPage() {
+/** 日期瀏覽保留；實際資料只由已登入的後端介面提供。 */
+export function BookingCalendarPage({
+  calendar,
+}: { calendar?: CalendarApi } = {}) {
+  const [bookings, setBookings] = useState<BookingRecord[] | null>(null)
   const [selected, setSelected] = useState(() => new Date())
   const [month, setMonth] = useState(() => new Date())
   const today = new Date()
@@ -49,24 +54,31 @@ export function BookingCalendarPage() {
       <div className='page-eyebrow'>預約管理</div>
       <h2 id='booking-title'>預約行事曆</h2>
       <p className='page-description'>
-        查看日期與預約；Google 行事曆功能待串接。
+        {calendar
+          ? '查看預約、連接 Google 日曆及設定可預約時間。'
+          : '查看日期與預約；Google 行事曆功能待串接。'}
       </p>
-      <div className='surface booking-connection'>
-        <div>
-          <h3>
-            <Link2 size={18} aria-hidden='true' />
-            Google Calendar
-          </h3>
-          <p id='booking-connection-note'>尚未串接，無法讀取空檔或建立預約。</p>
+      {calendar && <CalendarManager api={calendar} onRecords={setBookings} />}
+      {!calendar && (
+        <div className='surface booking-connection'>
+          <div>
+            <h3>
+              <Link2 size={18} aria-hidden='true' />
+              Google Calendar
+            </h3>
+            <p id='booking-connection-note'>
+              尚未串接，無法讀取空檔或建立預約。
+            </p>
+          </div>
+          <button
+            className='primary-button'
+            disabled
+            aria-describedby='booking-connection-note'
+          >
+            連接 Google（待開放）
+          </button>
         </div>
-        <button
-          className='primary-button'
-          disabled
-          aria-describedby='booking-connection-note'
-        >
-          連接 Google（待開放）
-        </button>
-      </div>
+      )}
       <div className='booking-layout'>
         <div className='surface booking-month'>
           <div className='booking-toolbar'>
@@ -134,52 +146,75 @@ export function BookingCalendarPage() {
             </tbody>
           </table>
           <p className='surface-note booking-timezone'>
-            日期依此裝置時區顯示；預約時區尚未設定。
+            {calendar
+              ? '日期格供瀏覽；每筆預約均標示店家的預約時區。'
+              : '日期依此裝置時區顯示；預約時區尚未設定。'}
           </p>
         </div>
         <div className='booking-detail-column'>
           <div className='surface booking-day-detail' aria-live='polite'>
             <h3>{dateLabel(selected)}</h3>
-            <div className='booking-empty'>
-              <CalendarDays size={32} aria-hidden='true' />
-              <strong>預約資料尚未載入</strong>
-              <p>
-                完成日曆串接後，才能查看此日預約。此處空白不代表當天沒有預約。
-              </p>
+            {bookings === null ? (
+              <div className='booking-empty'>
+                <CalendarDays size={32} aria-hidden='true' />
+                <strong>預約資料尚未載入</strong>
+                <p>
+                  完成日曆串接後，才能查看此日預約。此處空白不代表當天沒有預約。
+                </p>
+              </div>
+            ) : (
+              <BookingRows
+                rows={bookings.filter(
+                  (r) =>
+                    new Intl.DateTimeFormat('en-CA', {
+                      timeZone: r.timeZone,
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    }).format(new Date(r.start)) ===
+                    new Intl.DateTimeFormat('en-CA', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    }).format(selected)
+                )}
+              />
+            )}
+          </div>
+          {!calendar && (
+            <div className='surface booking-setup'>
+              <h3>日曆設定</h3>
+              <dl>
+                <div>
+                  <dt>目標日曆</dt>
+                  <dd>待連接</dd>
+                </div>
+                <div>
+                  <dt>營業時段</dt>
+                  <dd>待設定</dd>
+                </div>
+                <div>
+                  <dt>預約長度</dt>
+                  <dd>待設定</dd>
+                </div>
+              </dl>
+              <details>
+                <summary>設定前須知</summary>
+                <p>
+                  使用自己的 Google Cloud 專案。先將 OAuth 設為 In
+                  production，再完成授權；曾在 Testing
+                  授權者須重新連接並驗證，避免固定七天失效。
+                </p>
+                <a
+                  href='https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                >
+                  查看安裝與授權指南（另開視窗）
+                </a>
+              </details>
             </div>
-          </div>
-          <div className='surface booking-setup'>
-            <h3>日曆設定</h3>
-            <dl>
-              <div>
-                <dt>目標日曆</dt>
-                <dd>待連接</dd>
-              </div>
-              <div>
-                <dt>營業時段</dt>
-                <dd>待設定</dd>
-              </div>
-              <div>
-                <dt>預約長度</dt>
-                <dd>待設定</dd>
-              </div>
-            </dl>
-            <details>
-              <summary>設定前須知</summary>
-              <p>
-                使用自己的 Google Cloud 專案。先將 OAuth 設為 In
-                production，再完成授權；曾在 Testing
-                授權者須重新連接並驗證，避免固定七天失效。
-              </p>
-              <a
-                href='https://github.com/JasperYang0609/ansai-line-admin/blob/main/INSTALL.md'
-                target='_blank'
-                rel='noopener noreferrer'
-              >
-                查看安裝與授權指南（另開視窗）
-              </a>
-            </details>
-          </div>
+          )}
         </div>
       </div>
     </section>

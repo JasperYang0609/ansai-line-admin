@@ -922,6 +922,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                   <CustomerDetailsPanel
                     key={selected.id}
                     api={api}
+                    canManageBooking={user.role === 'admin'}
                     conversationId={selected.id}
                     customerName={selected.customerName}
                     guardRef={customerGuard}
@@ -941,7 +942,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               </div>
             </>
           ) : tab === 'booking' ? (
-            <BookingCalendarPage />
+            <BookingCalendarPage calendar={api.calendar} />
           ) : tab === 'staff' ? (
             <StaffPage staff={staff} loading={loading} />
           ) : tab === 'reports' ? (

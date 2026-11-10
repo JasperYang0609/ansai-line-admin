@@ -158,3 +158,40 @@
     gap: 0;
   }
 }
+
+.booking-setup form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.booking-setup form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.booking-setup input,
+.booking-setup select {
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.booking-setup fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.booking-day-detail article + article {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.booking-eligibility {
+  margin-block: 16px;
+}
