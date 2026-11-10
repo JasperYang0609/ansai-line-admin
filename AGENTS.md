@@ -17,3 +17,5 @@
 - Google Calendar 採學員自有 GCP／OAuth，由本人 AI 桌面工具依 INSTALL.md「Google 行事曆：學員自有專案與七天失效防呆」引導。先核實預約後端能力；目前公版只有預約行事曆 UI，未提供預約後端，不捏造 callback／設定鍵。Testing 的 Calendar refresh token 有七天限制，正式發布後重新授權並驗證 refresh；個人自用不等於自動免此期限，也不保證永久有效。不得把當日驗證當成第八天實測，不將公司或其他學員的秘密帶入公版。
 
 - 預約行事曆後續串接先讀 docs/booking-calendar-handoff.md；已完成側欄入口與唯讀日期瀏覽，禁用的 Google 連接不能只解除 disabled 就視為功能完成。
+
+- 無自有網域的公開介紹及政策頁使用學員本人 Firebase Hosting 免費網站；Pages 仍是客服前端、Supabase 仍是後端。靜態頁模板位於 templates/calendar-public-site，由 INSTALL.md 的單一流程產生。先取得完整文案與預計網址的核准才發布，不新增 Worker、不綁帳單、不覆蓋既有網站，不公開公司設定。權限、政策與實際程式須一致；不得照搬本機 gog 的憑證保存說法。

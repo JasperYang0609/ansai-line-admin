@@ -4,6 +4,7 @@
 # Except these files & folders
 !/src
 !/scripts
+!/templates
 !AGENTS.md
 !INSTALL.md
 !index.html
