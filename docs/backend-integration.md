@@ -100,6 +100,7 @@ Demo 資料只在該 adapter 實例記憶體內，重新整理頁面重設；同
 | 方法與相對路徑 | 回應與條件 |
 | --- | --- |
 | GET `/calendar/status` | `{state:unconnected 或 connected 或 reconnect,isOwner:boolean}`；不含 token、密文或其他人的 Google 帳號 |
+| POST `/calendar/pause` | 管理員停用該通道預約並推進版本；未知結果保留，不因未知請求而拒絕暫停，回傳 `{enabled:false}` |
 | POST `/calendar/connect` | `{authorizationUrl}`；只允許官方 Google 授權網址、離線權限與驗證挑戰 |
 | GET `/calendar/callback` | Google 回呼，服務端交換授權碼及保存；不是前端登入端點 |
 | GET `/calendar/calendars` | `{calendars:[{id,name,timeZone,writable}]}`，只由原授權者使用 |

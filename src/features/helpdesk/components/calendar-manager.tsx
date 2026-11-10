@@ -187,6 +187,24 @@ export function CalendarManager({
             </button>
           </p>
         ))}
+      {status && (
+        <button
+          className='small-button'
+          disabled={busy}
+          onClick={() => {
+            setBusy(true)
+            void api
+              .pause()
+              .then(() => load())
+              .catch(() => {
+                setError('尚未確認暫停成功，請由管理員核對後端狀態。')
+                setBusy(false)
+              })
+          }}
+        >
+          暫停自動預約
+        </button>
+      )}
       {next && (
         <button
           className='small-button'

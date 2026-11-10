@@ -38,6 +38,7 @@ function api(): CalendarApi {
     })),
     connect: vi.fn(async () => ''),
     save: vi.fn(async () => ({ version: 3 })),
+    pause: vi.fn(async () => ({ enabled: false as const })),
     reconcile: vi.fn(async () => ({ status: 'confirmed' as const })),
     approve: vi.fn(async () => ({ approved: true as const })),
   }
@@ -82,4 +83,15 @@ it('核准資格必須明確點擊，沿用指定客戶與目前服務版本', a
     .element(page.getByText('已核准這位客戶預約目前服務。'))
     .toBeVisible()
   expect(a.approve).toHaveBeenCalledWith('synthetic-customer', 2)
+})
+
+it('暫停必須明確點擊，呼叫後端停用而非只改前端畫面', async () => {
+  const a = api()
+  await render(<CalendarManager api={a} onRecords={() => {}} />)
+  await expect
+    .element(page.getByRole('button', { name: '暫停自動預約' }))
+    .toBeVisible()
+  expect(a.pause).not.toHaveBeenCalled()
+  await page.getByRole('button', { name: '暫停自動預約' }).click()
+  await expect.poll(() => a.pause).toHaveBeenCalledTimes(1)
 })

@@ -118,6 +118,12 @@ export function createCalendarApi(
         )
       )
     },
+    async pause() {
+      return checked(
+        z.object({ enabled: z.literal(false) }),
+        await call('/calendar/pause', { method: 'POST' })
+      )
+    },
     async reconcile(id: string) {
       if (!/^[a-f0-9-]{36}$/.test(id)) throw Error('預約識別碼無效。')
       return checked(
