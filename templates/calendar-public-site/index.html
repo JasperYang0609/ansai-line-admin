@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{{APP_NAME}}｜服務介紹</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">{{APP_NAME}}</a>
+      <nav aria-label="網站導覽">
+        <a href="/">服務介紹</a><a href="/privacy/">隱私政策</a
+        ><a href="/terms/">服務說明</a>
+      </nav>
+    </header>
+    <main>
+      <h1>{{APP_NAME}}</h1>
+      <p>
+        透過 LINE 與我們確認服務內容和時間，再將確認完成的預約登記到店家的
+        Google 日曆。
+      </p>
+      <h2>如何預約</h2>
+      <ol>
+        <li>告訴客服您的需求。</li>
+        <li>客服核對服務條件、營業時段與可用時間。</li>
+        <li>請確認服務、日期、時間與時區。</li>
+        <li>系統重新檢查時段並建立行程；成功後才回覆預約完成。</li>
+      </ol>
+      <p>
+        若服務另有付款或資格條件，以已確認的訂單、付款或人工審核資料為準。AI
+        不自行判定您已付款。
+      </p>
+      <h2>Google 授權由誰進行</h2>
+      <p>
+        僅由店家管理者連接自己的 Google
+        帳號及選定日曆。一般預約客戶不必授權自己的 Google 帳號。
+      </p>
+      <h2>雲端運作方式</h2>
+      <p>
+        客服工作台由 Cloudflare Pages 提供；Google
+        授權回呼、憑證更新、預約及紀錄由店家自己的 Supabase 後端執行。店家電腦與
+        AI 桌面工具不必持續開啟。這個網站僅提供公開介紹、隱私政策及服務說明。
+      </p>
+      <p>
+        請先閱讀<a href="/privacy/">隱私政策</a>及<a href="/terms/">服務說明</a
+        >。有疑問請聯絡頁尾信箱。
+      </p>
+    </main>
+    <footer>
+      營運者：{{OPERATOR_NAME}}<br />聯絡方式：<a
+        href="mailto:{{CONTACT_EMAIL}}"
+        >{{CONTACT_EMAIL}}</a
+      ><br />版本日期：{{POLICY_DATE}}
+      <p>本服務為獨立店家的預約工具，並非 Google 官方產品。</p>
+    </footer>
+  </body>
+</html>

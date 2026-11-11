@@ -91,3 +91,32 @@ POST /conversations/:id/messages，body = { body: string, expectedVersion: integ
 AI 預設讀取同份、相同 tenant/channel/customer 的記事與標籤作為回覆參考，不使用另一份共享 RAG 或 embedding 索引。記事與標籤是**不可信資料**，不是模型系統指令或工具授權；後端必須以低信任上下文包裝，不能將其中指令提升權限、跨客戶查詢或原文直接傳給顧客。前端的儲存操作不傳 LINE 訊息、不同步 LINE OA 原生記事／標籤，也不呼叫模型。AI 實際讀取與防注入必須由後端另行驗收，前端提示不代表模型已接線。
 
 Demo 資料只在該 adapter 實例記憶體內，重新整理頁面重設；同實例的登出登入不是正式持久化證據。正式部署前，另驗同租戶雙員工衝突、跨租戶／通道／客戶拒絕、權限撤銷、儲存失敗、AI 上下文來源與跨登入讀回；不得用本機 mock 測試代替。
+
+
+## Google 日曆與自動預約增量
+
+以下是新增 adapter 的契約，需先有相容後端；公版沒有附安賽私有 SQL、秘密或公司設定。沿用既有登入、管理 API base 與租戶／通道邊界。管理操作由服務端驗證 active 管理者，瀏覽器不提供可信的員工、租戶或收件人身分。Google 授權回呼以一次性 state 綁定原管理者。
+
+| 方法與相對路徑 | 回應與條件 |
+| --- | --- |
+| GET `/calendar/status` | `{state:unconnected 或 connected 或 reconnect,isOwner:boolean}`；不含 token、密文或其他人的 Google 帳號 |
+| POST `/calendar/pause` | 管理員停用該通道預約並推進版本；未知結果保留，不因未知請求而拒絕暫停，回傳 `{enabled:false}` |
+| POST `/calendar/connect` | `{authorizationUrl}`；只允許官方 Google 授權網址、離線權限與驗證挑戰 |
+| GET `/calendar/callback` | Google 回呼，服務端交換授權碼及保存；不是前端登入端點 |
+| GET `/calendar/calendars` | `{calendars:[{id,name,timeZone,writable}]}`，只由原授權者使用 |
+| GET／POST `/calendar/settings` | GET `{settings:null 或設定}`；設定含 calendarId、service、rules、eligibility、enabled、version。POST 必須驗證版本、本人可寫日曆、時區／營業規則後保存，回傳 `{version}` |
+| GET `/calendar/bookings` | `{bookings:[{id,conversationId,eventId,start,end,status,service,timeZone}],next:null 或 {createdAt,id}}`；`beforeAt`／`beforeId` 分頁，不到期隱藏 |
+| POST `/calendar/approve` | `{conversationId,settingsVersion}`；核對原客戶及目前服務，回傳 `{approved:true}`；不讓 AI 自行指定已付款 |
+| POST `/calendar/bookings/{id}/reconcile` | 只讀同一筆 Google 事件並核對識別碼、服務端操作標記與時間；確認後回傳 `{status}`，禁止重新建立 |
+
+rules 包含 timeZone、weekdays（0–6）、opens／closes（HH:mm）、durationMinutes、bufferBefore／bufferAfter（分鐘）、excludedDates。eligibility 是 open／approval；預約狀態是 offered／writing／unknown／confirmed／unavailable／cancelled。未設定、重新授權、權限不足與讀取失敗須分開，不回傳假成功。衝突、逾時或未知結果不得自動重送。安裝與正式驗收只維護於 INSTALL.md。
+
+
+### Google 手動變更同步與每日筆數
+
+- POST /calendar/sync：已登入管理員明確觸發 Google 唯讀核對，後端依本人租戶／通道及保存的 calendar／event 對應更新既有預約，不接受前端指定其他 owner、tenant 或 Google token。回傳 {checked,updated,cancelled,conflicts,failed,remaining}，所有欄位為非負整數。每批有上限；remaining／failed／conflicts 非零時，前端顯示未全部完成，不假稱即時或完整成功。授權／網路／權限失敗不等於刪除。
+- GET /calendar/bookings 的每筆紀錄新增可選 syncStatus (ok|conflict|error|null) 與 syncedAt (ISO|null)。取消紀錄保留 status=cancelled；同步異常保留上次資料並警告。Google 改期撞期時，保守保留原時間並提示人工核對，不覆蓋其他預約。
+- GET /calendar/booking-counts?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD：含首尾最多42日，回傳 {counts:[{date,count}]}。僅計 confirmed，依每筆保存的預約時區歸日，不計 offered／writing／unknown／unavailable／cancelled。這是資料庫內已同步的預約，不包含所有私人 Google 事件，也不是空檔查詢。
+- 統計須涵蓋指定範圍全部紀錄，不能只計預約列表第一頁。沒有日期列代表該日零筆；超過伺服器安全處理上限或查詢失敗，回傳錯誤而非部分總數。前端顯示載入／錯誤狀態，不把未知視為零。
+- 前端首次載入、切月與紀錄重新載入後讀統計。明確點「同步 Google 並重新整理」先 POST 同步，再讀預約及筆數；月曆切換不發 LINE、不建立 Google 事件、不修改設定。較早預約仍可分頁載入。
+- 後端需提供不依賴瀏覽器的既有 worker 同步；精確節奏與單批上限依各自後端部署契約。這不是前端固定輪詢，也不保證即時；接線前核對 scheduler 已啟用。僅推送本 repo 不會啟用後端。

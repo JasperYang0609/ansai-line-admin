@@ -164,7 +164,7 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 
 ### 課堂驗收：不是登入成功就算完成
 
-以下是未來模組的必要驗收項目，**本次文件更新未實作或執行這些測試**。驗收只用學員指定的測試日曆與虛構測試資料，不讀取無關私人事件、不寄送真實客戶邀請。
+以下是正式接線的必要驗收項目。公版前端與本機合成測試完成，不等於學員的 Supabase／Google 已部署或完成真實驗收。驗收只用學員指定的測試日曆與虛構測試資料，不讀取無關私人事件、不寄送真實客戶邀請。
 
 - [ ] 記錄版本 commit、目標專案／OAuth client 的非秘密識別、發布狀態及授權日期；Publishing status 已回讀為 In production。證據去除私人資料與任何 token。
 - [ ] 後端確實持有 refresh token 並成功取得新的 access token；後端程序重啟後仍能取回授權。不能只測前端顯示「已連接」。
@@ -183,6 +183,70 @@ AI 桌面工具是安裝助手，不是長期執行主機。預約及 token refr
 - In production 消除的是 **Testing 的固定七天限制**，不是永久授權保證。Google 仍可能因撤銷、refresh token 六個月未使用、token 數量限制、限時同意或組織政策使授權失效。不得承諾「永不掉線／完全零客訴」。
 
 官方依據（2026-11-10 核對）：[OAuth token 到期與撤銷](https://developers.google.com/identity/protocols/oauth2)、[Personal use 與驗證例外](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)、[Web server OAuth／offline access](https://developers.google.com/identity/protocols/oauth2/web-server)、[Calendar scopes](https://developers.google.com/workspace/calendar/api/auth)。
+
+### 相容預約後端的接線順序
+
+1. 保留原客服 API base、Supabase 與員工登入。先核對後端是否實作 [預約契約](docs/backend-integration.md#google-日曆與自動預約增量)，再用原管理 API 的 `/calendar/status` 驗證。未登入、非管理者須拒絕；503／未部署不能改成假連接成功或空清單。
+2. 由本人核准後，先套用後端提供的新增式 migration，再部署相容函式。後端需一次性 state、加密憑證、自動 refresh、持久預約紀錄與跨請求鎖。公版不包含安賽私有後端，不能只啟用前端按鈕代替實作。
+3. 日曆後端的 `GOOGLE_CALENDAR_CLIENT_ID`、`GOOGLE_CALENDAR_CLIENT_SECRET`、`CALENDAR_ENCRYPTION_KEY_BASE64` 僅填在本人 Supabase 的函式秘密設定；加密金鑰與密文分離，與對話加密金鑰分開。不要寫入 `VITE_`、聊天、日誌或 Git。`LINE_CALENDAR_ENABLED` 與 `LINE_BOOKING_ENABLED` 預設 false；前者供連接／管理，後者供客戶自動預約，正式開放須分別核准。
+4. 回讀原 OAuth 專案為 External／In production，再建立或核對 Web application client。以已部署後端回讀確認的實際 `/calendar/callback` 完整 HTTPS 路徑填入 redirect URI；不是 Firebase 公開頁，也不是 Pages 首頁。只使用 Calendar 清單、事件及忙碌查詢所需權限。瀏覽器由本人授權，回呼服務端保存後回到客服後台重新登入核對，不保存 Google token 到瀏覽器。
+5. 使用管理員登入「預約行事曆」，連接 Google、選擇本人可寫入的測試日曆。明確填入服務、時區、星期、營業時間、長度、前後緩衝及資格規則，再保存。欄位未完整、載入失敗或版本衝突不能放行；預約啟用勾選預設關閉，不替學員假定營業時間。
+6. 需付款或人工資格的服務選「客服確認資格後才能預約」。管理員在該客戶的內部資料區核對實際訂單、付款或資格後，點「確認資格並允許預約」。這不是付款紀錄，也不代表已建立行程；設定版本變更後須重新核對。只有確實不需其他資格的服務才由本人選擇開放模式。
+7. LINE 客戶提出預約日期與時間，後端查詢後回覆服務、時區、長度及一次性確認碼。客戶回覆「確認預約 確認碼」後再重查及受控建立，保存成功才回覆完成。支援明確年月日時分，以及今天／明天／後天搭配數字時刻；其他模糊描述先請客戶補充，不由模型猜時間。每輪確認碼十分鐘內有效。
+8. 結果待核對時，不重送、不更換 event ID。管理員可在預約頁點「只核對原行程」，只查同一筆 Google 事件；找不到時保留鎖定與錯誤。預約歷史分頁讀取，不因超過三十天或第一頁筆數而清空。改期與取消目前交真人核對原預約處理，不宣稱自動改期／取消已串好。
+   - Google 手動刪除／改期的同步版本：先核對相容後端具備 POST /calendar/sync、完整日統計與新增的 cancelled 狀態，再依本人核准套用後端 migration／部署。後台按「同步 Google 並重新整理」會核對 Google，不是只重讀舊資料；同步失敗／撞期保留警告，不能當作取消成功。後端自動同步沿用既有 worker，確認已啟用且記錄單批上限／延遲，不要求電腦常開。
+   - 月曆日期下圓形徽章的數字只計資料庫已確認且未取消的預約，依每筆保存時區歸日；不是全部 Google 私人事件，也不代表空檔。需有獨立完整範圍統計，不能把第一頁筆數當總數。未載入／失敗顯示未知。
+   - 在核准測試日曆實測手動刪除、移到另一日期、衝突、重複同步與授權失效；核對預約紀錄、時段占用、當日筆數一致，且不發 LINE 通知。未做正式實測只能標示本機測試完成。
+9. 依下方 Day 0／Day 8 項目驗收。真人接手前已開始的 Google 請求可能仍完成：保存結果但停止 AI 搶答，客服先核對既有紀錄；不能把外部請求當作能即時撤回。後端可避免本系統內部撞期，Google 日曆人工或其他應用在最後查詢後同時編輯仍有競態，不能宣稱跨所有外部系統的絕對鎖定。
+10. 回退時先由管理員按「暫停自動預約」，在資料庫停用並推進版本，阻止仍在執行的舊工作開始新的寫入；保留未知結果。再停用客戶預約開關與新的授權設定操作，保留資料表、密文、固定 event ID 與 writing／unknown／confirmed 狀態，再還原相容應用版本。不要刪 migration、清空預約、解鎖未知結果或重跑收訊佇列。正式測試事件、發送次數、預算與回復點須在本人核准清單內。
+
+## 無網域小店家的公開頁面：Firebase Hosting
+
+固定分工：Cloudflare Pages 提供客服工作台；學員自己的 Supabase 提供授權回呼、憑證更新、預約執行與保存；學員自己的 Firebase Hosting 只提供公開介紹、隱私政策與服務說明。桌面工具不是長期主機。本節取代「需要先有自有網域／官網」的假設，不取代前述後端能力檢查。
+
+公版模板在 `templates/calendar-public-site/`，不含安賽憑證或店家設定。`scripts/prepare-calendar-site.mjs` 只產生本機檔案，不登入、不部署、不建立 Firebase 專案、不新增依賴。必須先核實政策所描述的加密、權限、AI 資料邊界及預約功能已實作並通過測試，才可對外啟用；靜態頁完成不是後端完成。
+
+### 先準備完整文案，取得發布核准
+
+1. 核對本人 Google 帳號及既有 OAuth／Calendar 專案；不得共用講師的專案、OAuth 或參考網站。公開說明頁可使用另一個 Firebase 專案，不必與 OAuth 位於同一個 GCP 專案。依計費狀態分流：
+   - 既有專案未綁帳單：確認 Spark 免費方案與必要條款。若已有 Hosting，先唯讀列出 sites 並核對內容，使用新網站，不覆蓋既有網站。
+   - 既有專案已綁帳單，或加入 Firebase 時顯示將採 Blaze：**保留原計費、帳務與服務**，不要教學員解除計費。取得本人建立獨立專案的核准後，以同一個已授權帳號另建只放公開說明頁的 Firebase Spark 專案；不綁帳單、不啟用付費服務，關閉非必要的 Analytics、Gemini 與開發人員計畫。原 OAuth／Calendar 與 Supabase 不遷移、不重建。
+   - 遇到專案配額或必須付費：停止該步並回報，不自行調整原專案或帳單。
+2. 選定可用的 `SITE_ID`。本次先提出預計網址 `https://SITE_ID.web.app/`、`/privacy/`、`/terms/`，在實際建立及讀回前只能標記「預計」。首頁與政策同網域、HTTPS、免登入；不要使用共同的 `web.app` 作授權網域。
+3. 在受保護本機位置建立以下**公開資料**設定檔，替換所有欄位；不要填入任何憑證。`aiProvider` 必須列出該店家實際設定的模型供應商；營運者與聯絡信箱須由本人確認。實際資料保存、第三方、模型處理範圍不同時，先修改並核准政策，不能只換店名發布不實內容。
+
+```json
+{
+  "appName": "請填應用名稱",
+  "operatorName": "請填營運者",
+  "contactEmail": "請填聯絡信箱",
+  "aiProvider": "請填實際模型供應商",
+  "policyDate": "2026-11-10",
+  "siteId": "請填本人網站識別碼",
+  "projectId": "請填本人專案識別碼"
+}
+```
+
+4. 使用既有 Node 24 執行，將路徑換成自己的公開設定檔。輸出只允許在本專案 `output/` 下的新資料夾，已存在即停止；不刪除或覆蓋檔案。`output/` 已忽略，不提交店家產物或設定。
+
+```sh
+node scripts/prepare-calendar-site.mjs --config /絕對路徑/公開設定.json --out output/calendar-review-第一次
+node --test scripts/calendar-site-tests.mjs
+```
+
+5. 將產生的**完整**首頁、政策、服務說明及三個預計網址交本人核准。政策須說明 Supabase 雲端加密憑證保存、金鑰與密文分離、Google 資料用途、必要第三方與 AI 處理、保存／刪除要求、撤銷與聯絡方式。不得說憑證只存在本機，不把含憑證或原始 Google 日曆內容交給 AI。未核准不發布。
+
+### 核准後才設定並發布
+
+6. 優先使用既有 Firebase 工具；若需安裝 Firebase CLI，先告知本人再安裝官方工具，不改本專案的 pnpm／lockfile。先讀 `firebase --help`、`firebase hosting:sites:list --help`、`firebase deploy --help`，再使用帶有明確本人 project 的命令。Google 登入／MFA、Firebase 條款、憑證或敏感權限由本人確認。
+7. 在上面分流選定的本人公開頁專案啟用 Firebase，回讀確認 Spark 與無帳單綁定；以實際 sites 清單核對產生檔案中 `.firebaserc` 的 project 與 `firebase.json` 的 `hosting.site`。不得執行初始化指令覆寫根目錄、Pages 設定或既有 Firebase 設定；只在剛核准的新輸出資料夾執行。若 website 已有部署，停止並另選新 site。若已存在同名未完成頁面，先核對來源與使用者授權，不自動視為可覆蓋。
+8. 使用 Firebase Hosting 的單站部署範圍 `--only hosting`，project 由已核准設定明確指定。產生的設定只包含 `public/`，沒有 Functions、資料庫、費用服務或 SPA rewrite。只發布本人核准內容，不部署整個客服後台；保留本次版本供回復。
+9. 發布後以未登入頁面分別讀回三個實際 HTTPS 網址，確認各頁內容不同、首頁連到政策、政策是全文且不是登入頁；未知路徑應為 404，不能全部回到首頁。核對實際 project、site 與發布版本。不得以本機檔案、部署命令成功或網址存在代替讀回。
+10. 回到原本的 OAuth／Calendar 專案（不是新建公開頁專案），Google 品牌填入已驗證的首頁、政策及服務說明，Authorized domains 填完整實際 `SITE_ID.web.app`。首頁、政策及服務說明須同網域、公開免登入、HTTPS 可讀，首頁連到政策；Supabase callback 保持原後端路徑。儲存後離開並重新讀取 Branding，核對原專案、完整網址及授權網域；「已儲存草稿」不等於已通過品牌驗證或已切成 In production。若 Google 要求網域擁有權，依 Google 正式流程完成，不以換帳號或假冒網域規避；若提供的驗證方法在無自有網域情境不可行，停止該步並回報實際畫面。
+11. Web application client 只能填已完成後端提供的實際 Supabase callback，不能用靜態頁、Pages 首頁或 gog localhost callback。只申請實作需要的 Calendar scopes，先回讀 External／In production，再本人授權。正式發布不等於通過應用驗證；本人控制日曆、實際使用情境與 Google 例外條件必須逐項核對，不能只用人數少判定免審。
+12. 沿用上節 Day 0／滿八天唯讀驗收：後端持有加密 refresh token、重啟與短效憑證到期後仍能更新；曾在 Testing 授權者重新連接。Day 8 是不重登的 refresh／API 複驗，未滿八天標記待驗。真實事件僅在核准的測試日曆及次數內建立並讀回，不寄客戶邀請。
+
+官方依據：[Firebase Hosting 起步](https://firebase.google.com/docs/hosting/quickstart)、[多網站與本人網站識別碼](https://firebase.google.com/docs/hosting/multisites)、[Hosting 設定及錯誤頁](https://firebase.google.com/docs/hosting/full-config)、[Google 敏感權限與驗證例外](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)。
 
 ## 完成回報
 

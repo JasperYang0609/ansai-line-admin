@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { codepoints, customerUpdateSchema } from '../customer'
 import type { CustomerDetails, HelpdeskApi } from '../types'
+import { BookingEligibility } from './calendar-manager'
 
 export type CustomerGuard = { dirty: boolean; saving: boolean }
 const statusOf = (error: unknown) =>
@@ -10,6 +11,7 @@ const statusOf = (error: unknown) =>
 
 export function CustomerDetailsPanel({
   api,
+  canManageBooking = false,
   conversationId,
   customerName,
   guardRef,
@@ -17,6 +19,7 @@ export function CustomerDetailsPanel({
   onUnauthorized,
 }: {
   api: HelpdeskApi
+  canManageBooking?: boolean
   conversationId: string
   customerName: string
   guardRef: React.RefObject<CustomerGuard>
@@ -167,6 +170,12 @@ export function CustomerDetailsPanel({
         <p className='customer-notice'>
           示範資料僅存本頁記憶體，不會跨重新整理保存，也不呼叫 AI。
         </p>
+      )}
+      {canManageBooking && api.calendar && (
+        <BookingEligibility
+          api={api.calendar}
+          conversationId={conversationId}
+        />
       )}
       {loading && <p role='status'>正在載入客戶資料…</p>}
       {error && (

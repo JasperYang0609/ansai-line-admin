@@ -211,6 +211,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
   const [tab, setTab] = useState<Tab>('inbox')
   const [drawer, setDrawer] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
+  const [bookingRevision, setBookingRevision] = useState(0)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
@@ -411,6 +412,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
         return
       working = true
       dirty = false
+      if (context.tab === 'booking') setBookingRevision((v) => v + 1)
       const request = selection.current
       const current = () =>
         !stopped &&
@@ -574,6 +576,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
   }, [drawer])
   async function refresh() {
     setError('')
+    if (tab === 'booking') setBookingRevision((v) => v + 1)
     await loadOverview()
     if (selectedId) await loadMessages(selectedId)
   }
@@ -922,6 +925,7 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
                   <CustomerDetailsPanel
                     key={selected.id}
                     api={api}
+                    canManageBooking={user.role === 'admin'}
                     conversationId={selected.id}
                     customerName={selected.customerName}
                     guardRef={customerGuard}
@@ -941,7 +945,12 @@ export function HelpdeskApp({ api }: { api: HelpdeskApi }) {
               </div>
             </>
           ) : tab === 'booking' ? (
-            <BookingCalendarPage />
+            <BookingCalendarPage
+              calendar={api.calendar}
+              conversations={conversations}
+              revision={bookingRevision}
+              viewerRole={user?.role}
+            />
           ) : tab === 'staff' ? (
             <StaffPage staff={staff} loading={loading} />
           ) : tab === 'reports' ? (

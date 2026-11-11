@@ -34,6 +34,9 @@ jobs:
       - name: Test setup failure paths
         run: node --test scripts/setup-tests.mjs
 
+      - name: 驗證公開政策頁隔離及拒絕覆寫
+        run: node --test scripts/calendar-site-tests.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

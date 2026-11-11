@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>隱私政策｜{{APP_NAME}}</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">{{APP_NAME}}</a>
+      <nav aria-label="網站導覽">
+        <a href="/">服務介紹</a><a href="/privacy/">隱私政策</a
+        ><a href="/terms/">服務說明</a>
+      </nav>
+    </header>
+    <main>
+      <h1>隱私政策</h1>
+      <p>
+        本政策適用於 {{OPERATOR_NAME}} 營運的「{{APP_NAME}}」，說明 LINE
+        預約客服與 Google Calendar 連接的資料處理方式。
+      </p>
+      <h2>一、我們處理哪些資料</h2>
+      <p>
+        依您在 Google
+        同意畫面授予的權限，系統讀取日曆清單及存取權限，供管理者選擇可寫入的預約日曆；查詢所選日曆的忙碌時段；依已確認的預約需求建立、讀回、改期或取消事件。服務另處理預約所需的服務名稱、客戶識別、日期時間、時區、狀態、Google
+        event ID 與操作核對紀錄。
+      </p>
+      <p>
+        Google
+        授權碼僅用於服務端交換憑證。短效存取憑證與長效授權憑證僅供後端執行已授權操作；不要求
+        Google 密碼、不申請 Gmail、Drive 或 Google Cloud
+        管理權。實際權限以同意畫面列示為準。
+      </p>
+      <h2>二、資料用途與預約確認</h2>
+      <p>
+        資料用於核對預約資格與空檔、建立及管理本人預約、防止撞期與重複操作、確認操作結果，以及提供支援與維護。需付款或其他資格的服務，由可信訂單、付款紀錄或人工確認判定，不由
+        AI 推測。結果不明時先核對既有事件，不盲目重送。
+      </p>
+      <h2>三、雲端保存與保護</h2>
+      <p>
+        Google Calendar 保存實際日曆事件。預約紀錄與 event ID 保存於店家自己的
+        Supabase；長效授權憑證由 Supabase 後端加密保存及使用，OAuth client
+        secret
+        與加密金鑰置於伺服器端秘密儲存，與資料庫密文分開。後端依店家、通道及客戶邊界檢查每次操作權限。
+      </p>
+      <p>
+        憑證、金鑰與授權碼不放入前端公開設定、瀏覽器持久儲存、程式庫或日誌，也不提供給
+        AI 模型。AI 桌面工具僅協助安裝與開發，不是資料長期保存或預約執行主機。
+      </p>
+      <h2>四、必要第三方與 AI 處理</h2>
+      <p>
+        Google 提供帳號授權與 Calendar；Supabase
+        提供登入、後端執行及資料保存；Cloudflare Pages 提供客服工作台；Firebase
+        Hosting 提供這些公開靜態頁面；LINE
+        提供客戶通訊。上述服務可能按其政策處理必要的傳輸及服務安全資料。
+      </p>
+      <p>
+        AI
+        客服可能將對話中與服務、預約意圖及時間確認有關的必要文字，交由店家設定的
+        AI 模型供應商處理。此部署的供應商為 {{AI_PROVIDER}}。不把 Google
+        授權憑證、原始日曆事件正文、完整日曆清單或原始忙碌查詢回應提供給模型；必要時由後端提供不含其他事件內容的可預約時段或操作狀態。Google
+        日曆資料不進共用知識庫，不用於廣告、出售、跨客戶剖析或訓練一般用途 AI
+        模型。
+      </p>
+      <h2>五、保存、更正與刪除</h2>
+      <p>
+        Google
+        事件依店家日曆設定保存。授權憑證在服務連接所需期間保存；撤銷或失效後停止新的授權操作。客服歷史、預約及操作紀錄供持續服務、核對及爭議處理使用，不因取消預約或撤銷
+        Google 授權而自動清空，也不與憑證共用同一到期刪除規則。
+      </p>
+      <p>
+        您可透過頁尾聯絡方式要求查詢、更正、停止使用或刪除本服務保存的相關資料。營運者核對身分與權限後，依適用法令及必要保存義務處理，並說明可處理範圍；依法必須保存者限制用途及存取。撤銷授權不等於刪除日曆事件；取消預約也不等於刪除客服歷史。
+      </p>
+      <h2>六、撤銷與重新連接</h2>
+      <p>
+        日曆擁有者可至<a
+          href="https://myaccount.google.com/connections"
+          rel="noreferrer"
+          >Google 帳戶的第三方應用程式與服務連線</a
+        >撤銷本應用。授權失效時停止不安全的預約操作並請管理者重新連接，保留原事件與待核對紀錄。重新連接不批次重送未知結果；Google
+        授權也不保證永久有效。
+      </p>
+      <h2>七、有限使用與政策更新</h2>
+      <p>
+        本服務使用及轉移從 Google API 取得的資訊，將遵守<a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          rel="noreferrer"
+          >Google API 服務使用者資料政策</a
+        >及其中的有限使用要求。政策更新會在本頁標示日期；用途或權限有重大變更時，先說明並依需要重新取得同意。
+      </p>
+      <h2>八、聯絡我們</h2>
+      <p>
+        資料與服務問題請聯絡 {{OPERATOR_NAME}}：<a
+          href="mailto:{{CONTACT_EMAIL}}"
+          >{{CONTACT_EMAIL}}</a
+        >。
+      </p>
+    </main>
+    <footer>
+      版本日期：{{POLICY_DATE}}
+      <p>本服務為獨立店家的預約工具，並非 Google 官方產品。</p>
+    </footer>
+  </body>
+</html>
