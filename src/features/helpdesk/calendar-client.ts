@@ -20,7 +20,9 @@ const settingsSchema = z.object({
 })
 const recordSchema = z.object({
   id: z.string(),
-  conversationId: z.string(),
+  conversationId: z.string().nullable(),
+  updatedAt: z.string().optional(),
+  customerName: z.string().optional(),
   eventId: z.string(),
   start: z.string(),
   end: z.string(),
@@ -53,8 +55,46 @@ export function createCalendarApi(
         z.object({
           state: z.enum(['unconnected', 'connected', 'reconnect']),
           isOwner: z.boolean(),
+          canManage: z.boolean().optional(),
+          canBook: z.boolean().optional(),
+          service: z
+            .object({
+              name: z.string(),
+              timeZone: z.string(),
+              durationMinutes: z.number(),
+            })
+            .nullable()
+            .optional(),
         }),
         await call('/calendar/status')
+      )
+    },
+    async changeBooking(
+      input:
+        | {
+            kind: 'create'
+            requestId: string
+            start: string
+            conversationId?: string
+            customerName?: string
+          }
+        | {
+            kind: 'move' | 'cancel'
+            requestId: string
+            bookingId: string
+            expectedUpdatedAt: string
+            start?: string
+          }
+    ) {
+      return checked(
+        z.object({
+          bookingId: z.string(),
+          status: z.enum(['confirmed', 'cancelled', 'unknown']),
+        }),
+        await call('/calendar/staff-bookings', {
+          method: 'POST',
+          body: JSON.stringify(input),
+        })
       )
     },
     async connect() {

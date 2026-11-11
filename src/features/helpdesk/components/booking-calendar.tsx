@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Link2 } from 'lucide-react'
 import type { CalendarApi, BookingRecord } from '../calendar-client'
+import type { Conversation } from '../types'
 import './booking-calendar.css'
 import { CalendarManager, BookingRows } from './calendar-manager'
+import { StaffBookingEditor, type BookingEdit } from './staff-booking-editor'
 
 const dateLabel = (date: Date) =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -29,7 +31,21 @@ const sameDay = (a: Date, b: Date) =>
 /** 日期瀏覽保留；實際資料只由已登入的後端介面提供。 */
 export function BookingCalendarPage({
   calendar,
-}: { calendar?: CalendarApi } = {}) {
+  conversations = [],
+  revision = 0,
+  viewerRole,
+}: {
+  calendar?: CalendarApi
+  conversations?: Conversation[]
+  revision?: number
+  viewerRole?: 'admin' | 'agent'
+} = {}) {
+  const [status, setStatus] = useState<Awaited<
+    ReturnType<CalendarApi['status']>
+  > | null>(null)
+  const [edit, setEdit] = useState<BookingEdit | null>(null)
+  const [notice, setNotice] = useState('')
+  const [changed, setChanged] = useState(0)
   const [bookings, setBookings] = useState<BookingRecord[] | null>(null)
   const [dayCounts, setDayCounts] = useState<{
     key: string
@@ -98,10 +114,18 @@ export function BookingCalendarPage({
       <h2 id='booking-title'>預約行事曆</h2>
       <p className='page-description'>
         {calendar
-          ? '查看預約、連接 Google 日曆及設定可預約時間。'
+          ? '查看與管理預約。'
           : '查看日期與預約；Google 行事曆功能待串接。'}
       </p>
-      {calendar && <CalendarManager api={calendar} onRecords={setBookings} />}
+      {calendar && (
+        <CalendarManager
+          api={calendar}
+          onRecords={setBookings}
+          onStatus={setStatus}
+          viewerRole={viewerRole}
+          revision={revision + changed}
+        />
+      )}
       {!calendar && (
         <div className='surface booking-connection'>
           <div>
@@ -226,16 +250,67 @@ export function BookingCalendarPage({
         <div className='booking-detail-column'>
           <div className='surface booking-day-detail' aria-live='polite'>
             <h3>{dateLabel(selected)}</h3>
+            {notice && <p role='status'>{notice}</p>}
+            {calendar && status?.canBook && !edit && (
+              <button
+                className='primary-button'
+                onClick={() =>
+                  setEdit({ kind: 'create', day: dateKey(selected) })
+                }
+              >
+                新增預約
+              </button>
+            )}
+            {calendar && edit && (
+              <StaffBookingEditor
+                api={calendar}
+                edit={edit}
+                service={status?.service ?? null}
+                conversations={conversations}
+                onClose={() => setEdit(null)}
+                onChanged={(message) => {
+                  setNotice(message)
+                  setEdit(null)
+                  setChanged((v) => v + 1)
+                }}
+              />
+            )}
             {bookings === null ? (
               <div className='booking-empty'>
                 <CalendarDays size={32} aria-hidden='true' />
                 <strong>預約資料尚未載入</strong>
-                <p>
-                  完成日曆串接後，才能查看此日預約。此處空白不代表當天沒有預約。
-                </p>
+                <p>尚未取得預約紀錄，請重新讀取後再確認當天是否有預約。</p>
               </div>
             ) : (
               <BookingRows
+                customerName={(row) =>
+                  row.customerName ??
+                  conversations.find((c) => c.id === row.conversationId)
+                    ?.customerName
+                }
+                actions={(row) =>
+                  status?.canBook &&
+                  row.status === 'confirmed' &&
+                  row.updatedAt &&
+                  !edit && (
+                    <div className='booking-month-actions'>
+                      <button
+                        className='small-button'
+                        onClick={() => setEdit({ kind: 'move', booking: row })}
+                      >
+                        調整時間
+                      </button>
+                      <button
+                        className='small-button'
+                        onClick={() =>
+                          setEdit({ kind: 'cancel', booking: row })
+                        }
+                      >
+                        取消預約
+                      </button>
+                    </div>
+                  )
+                }
                 rows={bookings.filter(
                   (r) =>
                     new Intl.DateTimeFormat('en-CA', {

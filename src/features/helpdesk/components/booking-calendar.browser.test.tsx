@@ -107,6 +107,10 @@ function calendarFixture(): CalendarApi {
       failed: 0,
       remaining: 0,
     })),
+    changeBooking: vi.fn(async () => ({
+      bookingId: '合成預約',
+      status: 'confirmed' as const,
+    })),
     connect: vi.fn(async () => ''),
     save: vi.fn(async () => ({ version: 1 })),
     pause: vi.fn(async () => ({ enabled: false as const })),
@@ -200,7 +204,7 @@ it('Google 刪除同步後更新每日筆數，保留取消紀錄而不再顯示
     .element(page.getByRole('button', { name: /2026年11月11日.*0 筆預約/ }))
     .toBeVisible()
   expect(document.querySelectorAll('.booking-day-count')).toHaveLength(0)
-  await expect.element(page.getByText('已取消（Google 日曆）')).toBeVisible()
+  await expect.element(page.getByText('已取消', { exact: true })).toBeVisible()
 })
 
 it('統計失敗顯示未知而非零筆；切月後不套用前一月份晚到回應', async () => {
@@ -249,5 +253,63 @@ it('320px 有筆數的日期仍可點選且不水平溢位', async () => {
     .toHaveAttribute('aria-pressed', 'true')
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
     window.innerWidth
+  )
+})
+
+it('客服看得到預約、可新增及取消，沒有 Google 授權或設定權限', async () => {
+  vi.setSystemTime(new Date(2026, 10, 11, 12))
+  const api = calendarFixture()
+  api.status = vi.fn(async () => ({
+    state: 'connected' as const,
+    isOwner: false,
+    canManage: false,
+    canBook: true,
+    service: { name: '合成諮詢', timeZone: 'Asia/Taipei', durationMinutes: 60 },
+  }))
+  const booking = {
+    id: '合成預約',
+    eventId: '合成事件',
+    conversationId: null,
+    service: '合成諮詢',
+    customerName: '合成來店客戶',
+    status: 'confirmed' as const,
+    start: '2026-11-11T02:00:00Z',
+    end: '2026-11-11T03:00:00Z',
+    timeZone: 'Asia/Taipei',
+    updatedAt: '2026-11-11T01:00:00Z',
+  }
+  let rows: Awaited<ReturnType<CalendarApi['bookings']>>['bookings'] = []
+  api.bookings = vi.fn(async () => ({ bookings: rows }))
+  api.changeBooking = vi.fn(async (input) => {
+    rows = [
+      input.kind === 'cancel' ? { ...booking, status: 'cancelled' } : booking,
+    ]
+    return {
+      bookingId: booking.id,
+      status:
+        input.kind === 'cancel'
+          ? ('cancelled' as const)
+          : ('confirmed' as const),
+    }
+  })
+  await render(<BookingCalendarPage calendar={api} />)
+  await page.getByRole('button', { name: '新增預約', exact: true }).click()
+  await page.getByLabelText('客戶姓名').fill('合成來店客戶')
+  await page.getByRole('button', { name: '儲存預約' }).click()
+  await expect
+    .element(page.getByText('合成來店客戶', { exact: true }))
+    .toBeVisible()
+  expect(api.settings).not.toHaveBeenCalled()
+  await expect
+    .element(page.getByRole('button', { name: '重新連接 Google' }))
+    .not.toBeInTheDocument()
+  await page.getByRole('button', { name: '取消預約', exact: true }).click()
+  await page.getByRole('button', { name: '確認取消' }).click()
+  await expect.element(page.getByText('已取消', { exact: true })).toBeVisible()
+  expect(api.changeBooking).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'cancel',
+      expectedUpdatedAt: booking.updatedAt,
+    })
   )
 })

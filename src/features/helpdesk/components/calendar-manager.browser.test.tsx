@@ -36,6 +36,10 @@ function api(): CalendarApi {
         },
       ],
     })),
+    changeBooking: vi.fn(async () => ({
+      bookingId: '合成預約',
+      status: 'confirmed' as const,
+    })),
     connect: vi.fn(async () => ''),
     save: vi.fn(async () => ({ version: 3 })),
     counts: vi.fn(async () => ({ counts: [] })),
@@ -175,7 +179,7 @@ it('同步失敗不以零筆或舊紀錄冒充成功，且允許再嘗試', asyn
   await expect
     .element(page.getByRole('alert'))
     .toHaveTextContent('Google 同步未完成')
-  expect(records).toHaveBeenLastCalledWith(null)
+  expect(records).not.toHaveBeenCalled()
   await expect
     .element(page.getByRole('button', { name: '同步 Google 並重新整理' }))
     .toBeEnabled()

@@ -16,14 +16,20 @@ const labels = {
   unknown: '結果待核對，請勿重送',
   confirmed: '預約完成',
   unavailable: '時段無法安排',
-  cancelled: '已取消（Google 日曆）',
+  cancelled: '已取消',
 }
 export function CalendarManager({
   api,
   onRecords,
+  onStatus,
+  revision = 0,
+  viewerRole,
 }: {
   api: CalendarApi
   onRecords: (rows: BookingRecord[] | null) => void
+  onStatus?: (status: Awaited<ReturnType<CalendarApi['status']>>) => void
+  revision?: number
+  viewerRole?: 'admin' | 'agent'
 }) {
   const loadVersion = useRef(Symbol())
   const [syncNotice, setSyncNotice] = useState('')
@@ -68,16 +74,20 @@ export function CalendarManager({
       const s = await api.status()
       if (version !== loadVersion.current) return
       setStatus(s)
-      const [a, b] = await Promise.all([api.settings(), api.bookings()])
+      onStatus?.(s)
+      const b = await api.bookings()
       if (version !== loadVersion.current) return
-      if (a.settings) setSettings(a.settings)
       setRecords(b.bookings)
       setNext(b.next ?? null)
       onRecords(b.bookings)
-      if (s.state === 'connected' && s.isOwner) {
-        const c = await api.calendars()
+      if (s.canManage !== false && (s.isOwner || s.canManage === undefined)) {
+        const [a, c] = await Promise.all([
+          api.settings(),
+          s.state === 'connected' && s.isOwner ? api.calendars() : null,
+        ])
         if (version !== loadVersion.current) return
-        setCalendars(c.calendars)
+        if (a.settings) setSettings(a.settings)
+        if (c) setCalendars(c.calendars)
       }
       if (sync) {
         if (sync.failed || sync.conflicts || sync.remaining) {
@@ -109,7 +119,7 @@ export function CalendarManager({
           ? 'Google 同步未完成，請確認授權、日曆權限與後端版本；原紀錄保留，不代表沒有預約。'
           : '日曆資料尚未讀取成功，請確認登入權限、後端版本與日曆設定。'
       )
-      onRecords(null)
+      if (!synchronize) onRecords(null)
     } finally {
       if (version === loadVersion.current) setBusy(false)
     }
@@ -123,15 +133,20 @@ export function CalendarManager({
       .then(async (s) => {
         if (!live || version !== loadVersion.current) return
         setStatus(s)
-        const [a, b] = await Promise.all([api.settings(), api.bookings()])
+        onStatus?.(s)
+        const b = await api.bookings()
         if (!live || version !== loadVersion.current) return
-        if (a.settings) setSettings(a.settings)
         setRecords(b.bookings)
         setNext(b.next ?? null)
         onRecords(b.bookings)
-        if (s.state === 'connected' && s.isOwner) {
-          const c = await api.calendars()
-          if (live && version === loadVersion.current) setCalendars(c.calendars)
+        if (s.canManage !== false && (s.isOwner || s.canManage === undefined)) {
+          const [a, c] = await Promise.all([
+            api.settings(),
+            s.state === 'connected' && s.isOwner ? api.calendars() : null,
+          ])
+          if (!live || version !== loadVersion.current) return
+          if (a.settings) setSettings(a.settings)
+          if (c) setCalendars(c.calendars)
         }
       })
       .catch(() => {
@@ -142,7 +157,28 @@ export function CalendarManager({
       live = false
       loadVersion.current = Symbol()
     }
-  }, [api, onRecords])
+  }, [api, onRecords, onStatus])
+  useEffect(() => {
+    if (!revision) return
+    let live = true
+    const version = loadVersion.current
+    void Promise.all([api.status(), api.bookings()])
+      .then(([s, b]) => {
+        if (!live || version !== loadVersion.current) return
+        setStatus(s)
+        onStatus?.(s)
+        setRecords(b.bookings)
+        setNext(b.next ?? null)
+        onRecords(b.bookings)
+      })
+      .catch(() => {
+        if (live && version === loadVersion.current)
+          setError('最新預約暫時無法讀取，畫面保留上次的紀錄。')
+      })
+    return () => {
+      live = false
+    }
+  }, [api, onRecords, onStatus, revision])
   async function older() {
     if (!next) return
     setBusy(true)
@@ -183,23 +219,26 @@ export function CalendarManager({
       setBusy(false)
     }
   }
+  const canManage = status?.canManage ?? viewerRole !== 'agent'
   const rule = (key: keyof CalendarSettings['rules'], value: unknown) =>
     setSettings({ ...settings, rules: { ...settings.rules, [key]: value } })
   return (
     <div className='surface booking-setup'>
-      <h3>Google 日曆連接與預約設定</h3>
+      <h3>{!canManage ? '預約同步' : 'Google 日曆連接與預約設定'}</h3>
       <p role='status'>{status ? states[status.state] : '日曆狀態尚未讀取'}</p>
       {error && <p role='alert'>{error}</p>}
       {saved && <p role='status'>{saved}</p>}
       {syncNotice && <p role='status'>{syncNotice}</p>}
       <div className='booking-month-actions'>
-        <button
-          className='primary-button'
-          disabled={busy}
-          onClick={() => void connect()}
-        >
-          {status?.state === 'connected' ? '重新連接 Google' : '連接 Google'}
-        </button>
+        {canManage && (
+          <button
+            className='primary-button'
+            disabled={busy}
+            onClick={() => void connect()}
+          >
+            {status?.state === 'connected' ? '重新連接 Google' : '連接 Google'}
+          </button>
+        )}
         <button
           className='small-button'
           disabled={busy}
@@ -231,7 +270,7 @@ export function CalendarManager({
             </button>
           </p>
         ))}
-      {status && (
+      {status && canManage && (
         <button
           className='small-button'
           disabled={busy}
@@ -258,7 +297,7 @@ export function CalendarManager({
           載入較早預約
         </button>
       )}
-      {status?.state === 'connected' && status.isOwner && (
+      {canManage && status?.state === 'connected' && status.isOwner && (
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -415,7 +454,15 @@ export function CalendarManager({
     </div>
   )
 }
-export function BookingRows({ rows }: { rows: BookingRecord[] }) {
+export function BookingRows({
+  rows,
+  customerName,
+  actions,
+}: {
+  rows: BookingRecord[]
+  customerName?: (row: BookingRecord) => string | undefined
+  actions?: (row: BookingRecord) => React.ReactNode
+}) {
   return (
     <>
       {rows.length === 0 ? (
@@ -424,6 +471,7 @@ export function BookingRows({ rows }: { rows: BookingRecord[] }) {
         rows.map((r) => (
           <article key={r.id}>
             <strong>{r.service}</strong>
+            {customerName?.(r) && <p>{customerName(r)}</p>}
             <p>
               {new Intl.DateTimeFormat('zh-TW', {
                 timeZone: r.timeZone,
@@ -433,6 +481,7 @@ export function BookingRows({ rows }: { rows: BookingRecord[] }) {
               （{r.timeZone}）
             </p>
             <p>{labels[r.status]}</p>
+            {actions?.(r)}
             {r.syncStatus === 'conflict' && (
               <p role='alert'>Google 改期後有時段衝突，請由真人核對。</p>
             )}
